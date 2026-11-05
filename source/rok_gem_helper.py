@@ -16,6 +16,10 @@ Per scan:
                                     scan again to start the gathering timer
    "Gathering 00:xx:xx"          -> gather countdown + "Gathering Level 3 Gem Mine"
                                     (the mine it was last seen marching to)
+   "Returning 00:xx:xx"          -> going home: countdown, then the row goes idle
+Each overlay row starts with a round badge: orange walker = marching,
+green pickaxe = gathering, blue arrow = returning, gold = scan now, red = resend.
+Coordinates on screen are not read.
 If only some rows are visible: scan, scroll, scan again.
 If a new commander shows up and every slot is taken (e.g. a fighting march was
 swapped for a gatherer), it takes over an idle slot that wasn't in the scan.
@@ -64,7 +68,6 @@ are kept per commander and level in march_smart.json; their median is used.
 While Smart Gather is On the card is called "Smart Gather Times" and shows the
 learned times in teal (read-only); a level not learned yet shows and uses your own
 time in grey. Off: your own times come back, editable. Your own times are kept.
-Note: the coordinates in a "Marching" row are where the march is NOW, not the mine.
 
 Updates: on start the exe asks GitHub (UPDATE_REPO) for the latest release. If it
 is newer than APP_VERSION a banner offers "Update now": the new exe is downloaded,
@@ -159,7 +162,6 @@ GATHERERS = {
 }
 MAX_MARCHES = 7
 TIME_RE = re.compile(r"(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})")
-COORD_RE = re.compile(r"[Xx]\s*[:;]\s*(\d{1,4})\s*[YyVv¥]\s*[:;]?\s*(\d{1,4})")
 TARGET_RE = re.compile(r"l[vy][l1iI|]\.?\s*(\d)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)", re.I)
 NAME_RE = re.compile(r"[A-Za-z]{3,}.*[/|\\].*[A-Za-z]{3,}")
 STATE_FILE = "march_state.json"
@@ -330,7 +332,7 @@ IC = {"scan": "", "settings": "", "info": "", "sound": "",
       "lock": "", "unlock": "", "down": "", "up": "",
       "walk": "", "reset": "", "smart": "", "log": "",
       "warn": "", "sync": "", "people": "", "minus": "",
-      "unknown": "", "heart": "", "keyboard": "", "bug": "\uebe8"}
+      "unknown": "", "return": "\ue7a7", "heart": "", "keyboard": "", "bug": "\uebe8"}
 
 
 # ================================================================ core
@@ -349,7 +351,6 @@ class Slot:
         self.norm = ""
         self.gatherer = False
         self.target = None       # current marching target label
-        self.coords = None
         self.last_target = None  # last mine it was marching to
         self.done = None         # when this arrival's gather was counted (gems)
         self.seen = 0            # last time a scan showed this commander
@@ -469,7 +470,11 @@ def cluster_timer(c):
         if mi >= 60 or sec >= 60:
             continue
         total, low = h * 3600 + mi * 60 + sec, t.lower()
-        if re.search(r"marc|\bto\s+gat", low):
+        if re.search(r"retur|\bretu", low):
+            kind, exact = "returning", "returning" in low
+            if total > 3 * 3600:
+                continue
+        elif re.search(r"marc|\bto\s+gat", low):
             kind, exact = "walking", "marching" in low
             if total > 3 * 3600:
                 continue
@@ -483,15 +488,6 @@ def cluster_timer(c):
         if best is None or score > best[0]:
             best = (score, kind, total)
     return (best[1], best[2]) if best else None
-
-
-def cluster_coords(c):
-    best = None
-    for _, t in c["texts"]:
-        m = COORD_RE.search(t)
-        if m and (best is None or len(m.group(0)) > len(best[0])):
-            best = (m.group(0), (int(m.group(1)), int(m.group(2))))
-    return best[1] if best else None
 
 
 def target_label(level, name):
@@ -571,10 +567,9 @@ def find_rows(clusters):
         kind = secs = None
         if timers:
             kind, secs = timers[0][1]
-        coords = next((cluster_coords(c) for c in inside if cluster_coords(c)), None)
         target = next((cluster_target(c) for c in inside if cluster_target(c)), None)
         rows.append({"y": clusters[i]["y"], "key": names[i]["key"], "raw": names[i]["raw"],
-                     "kind": kind, "secs": secs, "coords": coords, "target": target})
+                     "kind": kind, "secs": secs, "target": target})
     return rows, orphans
 
 
@@ -692,7 +687,7 @@ def finish_gather(s, now):
 def apply_rows(rows, n, smart=False):
     now = time.time()
     info = {"gathering": [], "walking": [], "nongather": 0, "noslot": [], "notimer": [],
-            "new": False, "gems": [], "swapped": [], "smart": []}
+            "new": False, "gems": [], "swapped": [], "smart": [], "returning": []}
     with lock:
         act = slots[:n]
         found = [match_slot(act, r) for r in rows]
@@ -718,6 +713,18 @@ def apply_rows(rows, n, smart=False):
                 info["notimer"].append(s.short)
                 continue
             label = r["target"]
+            if kind == "returning":           # going home: the gather it left is over
+                nd = now + secs
+                info["returning"].append(f"{s.short} ({fmt(secs)})")
+                if s.status == "returning" and s.walk_due and abs(s.walk_due - nd) < 20:
+                    continue
+                note = finish_gather(s, now)
+                if note:
+                    info["gems"].append(note)
+                s.reset()
+                s.done, s.target = None, None
+                s.status, s.start, s.walk_due = "returning", now, nd
+                continue
             if kind == "walking":
                 nd = now + secs
                 info["walking"].append(f"{s.short} ({fmt(secs)})")
@@ -730,7 +737,7 @@ def apply_rows(rows, n, smart=False):
                     s.last_target = label
                 elif s.status != "walking":
                     s.last_target = None
-                s.target, s.coords = label or s.target, r["coords"]
+                s.target = label or s.target
                 if same:
                     s.level = gem_level(s.target) or s.level
                     continue
@@ -739,7 +746,6 @@ def apply_rows(rows, n, smart=False):
                 s.status, s.start, s.walk_due = "walking", now, nd
                 s.level = gem_level(s.target)
             else:
-                xy = r["coords"]
                 if smart:                          # Smart Gather: time since arrival + time left
                     arr = s.arrived or (s.walk_due if s.status == "walking" and s.walk_due
                                         and s.walk_due <= now + 30 else None)
@@ -751,7 +757,6 @@ def apply_rows(rows, n, smart=False):
                                              f"using {fmt_mmss(smart_secs(s.key, lvl))} "
                                              f"({k} gather{'s' if k > 1 else ''})")
                 s.arrived = None                   # one measurement per arrival
-                s.coords = xy or s.coords
                 info["gathering"].append(s.short)
                 gd = now + secs
                 if s.status in ("gathering", "ready") and s.gather_due \
@@ -771,19 +776,20 @@ def sub_parts(s):
         return ("", "", "")
     if not s.gatherer:
         return (s.raw, "", "")
-    xy = f" (X:{s.coords[0]} Y:{s.coords[1]})" if s.coords else ""
     if s.status == "walking":
         if s.target:
-            return ("Marching to ", s.target, xy)
-        return ("Marching - target not detected" + xy, "", "")
+            return ("Marching to ", s.target, "")
+        return ("Marching - target not detected", "", "")
+    if s.status == "returning":
+        return ("Returning to the city", "", "")
     if s.status in ("gathering", "ready"):
-        post = xy + ("  - saved time" if s.est else "")
+        post = "  - saved time" if s.est else ""
         if s.last_target:
             return ("Gathering at ", s.last_target, post)
         return ("Mine level not read - scan while it is marching to see it" + post, "", "")
     if s.status == "update":
         if s.target:
-            return ("Arrived at ", s.target, xy + " - scan to start the timer")
+            return ("Arrived at ", s.target, " - scan to start the timer")
         return ("Arrived - scan to update", "", "")
     return ("", "", "")
 
@@ -843,6 +849,7 @@ class Overlay:
     """
     POS_FILE = "overlay_pos.json"
     ALPHA = 0.88
+    KEY = "#010203"          # window colour Windows makes see-through: the rounded corners
 
     def __init__(self, app):
         self.app = app
@@ -869,21 +876,27 @@ class Overlay:
         w.overrideredirect(True)
         w.attributes("-topmost", True)
         w.attributes("-alpha", self.ALPHA)
-        w.configure(bg=BG)
-        self.frame = tk.Frame(w, bg=BG, highlightthickness=1,
-                              highlightbackground=LINE, padx=6, pady=4)
-        self.frame.pack()
+        try:
+            w.configure(bg=self.KEY)
+            w.attributes("-transparentcolor", self.KEY)
+        except tk.TclError:
+            w.configure(bg=BG)              # no see-through colour: square corners
+        self.box = Box(w, BG, radius=12, pad=(10, 7), outline=LINE, shrink=True)
+        self.box.pack()
+        self.frame = self.box.body
         self.hint = tk.Label(self.frame, text=f"DRAG ME - {key_label(a.keys['move'])} LOCKS", fg=ORANGE,
                              bg=BG, font=a.mono(7))
         self.rows = []
         for _ in range(MAX_MARCHES):
             row = tk.Frame(self.frame, bg=BG)
+            ic = tk.Label(row, bg=BG, bd=0, image=a.status_img("idle", 18))
             n = tk.Label(row, bg=BG, fg=TEXT, font=a.mono(9), width=9, anchor="w")
             t = tk.Label(row, bg=BG, fg=WHITE, font=a.mono(9), width=8, anchor="e")
+            ic.pack(side="left", padx=(0, 6), pady=1)
             n.pack(side="left")
             t.pack(side="left")
-            self.rows.append((row, n, t))
-        widgets = [w, self.frame, self.hint] + [x for r in self.rows for x in r]
+            self.rows.append((row, ic, n, t))
+        widgets = [w, self.box, self.frame, self.hint] + [x for r in self.rows for x in r]
         for wd in widgets:
             wd.bind("<ButtonPress-1>", self._press)
             wd.bind("<B1-Motion>", self._motion)
@@ -926,7 +939,7 @@ class Overlay:
         self.locked = locked
         if not self.win:
             return
-        self.frame.configure(highlightbackground=LINE if locked else ORANGE)
+        self.box.set_outline(LINE if locked else ORANGE)
         self.vis = None
         with lock:
             self._layout()
@@ -972,26 +985,28 @@ class Overlay:
             return
         self._layout()
         if not self.vis:
-            row, n, t = self.rows[0]
+            row, ic, n, t = self.rows[0]
             row.configure(bg=BG)
+            ic.configure(bg=BG, image=self.app.status_img("empty", 18))
             n.configure(bg=BG, fg=TEXT, text="-- scan --")
             t.configure(bg=BG, text="")
             return
-        cols = {"idle": TEXT, "walking": ORANGE, "update": GOLD,
+        cols = {"idle": TEXT, "walking": ORANGE, "returning": ACCENT, "update": GOLD,
                 "gathering": GREEN, "ready": RED}
         blink = tick_n % 4 < 2
         for i in self.vis:
             s = slots[i]
-            row, n, t = self.rows[i]
+            row, ic, n, t = self.rows[i]
             bg = BG
             if s.status == "ready" and blink:
                 bg = FLASH
             elif s.status == "update" and blink:
                 bg = FLASH_UPD
             row.configure(bg=bg)
+            ic.configure(bg=bg, image=self.app.status_img(s.status, 18))
             n.configure(bg=bg, fg=cols[s.status], text=s.short[:9])
-            if s.status == "walking" and s.walk_due:
-                t.configure(bg=bg, text=short(s.walk_due - now), fg=ORANGE)
+            if s.status in ("walking", "returning") and s.walk_due:
+                t.configure(bg=bg, text=short(s.walk_due - now), fg=cols[s.status])
             elif s.status == "update":
                 t.configure(bg=bg, text="SCAN", fg=GOLD)
             elif s.gather_due:
@@ -1188,12 +1203,54 @@ class Tip:
         t.geometry(f"+{self.w.winfo_rootx()}+{self.w.winfo_rooty() + self.w.winfo_height() + 6}")
 
 
+def draw_pickaxe(d, S, fill):
+    """Pickaxe symbol (Windows' icon font has none): handle + tapered curved head."""
+    import math
+    cx, cy, r, th, w = 0.34 * S, 0.66 * S, 0.38 * S, 0.16 * S, int(0.08 * S)
+    tip = (cx + 0.40 * S * math.cos(math.radians(-45)), cy + 0.40 * S * math.sin(math.radians(-45)))
+    d.line([(cx, cy), tip], fill=fill, width=w)
+    d.ellipse([cx - w / 2, cy - w / 2, cx + w / 2, cy + w / 2], fill=fill)
+    outer, inner = [], []
+    for i in range(41):                 # head: an arc around the handle end, pointed tips
+        f = i / 40
+        a = math.radians(-45 - 75 + f * 150)
+        half = th * (0.12 + 0.88 * math.sin(math.pi * f) ** 0.7) / 2
+        outer.append((cx + (r + half) * math.cos(a), cy + (r + half) * math.sin(a)))
+        inner.append((cx + (r - half) * math.cos(a), cy + (r - half) * math.sin(a)))
+    d.polygon(outer + inner[::-1], fill=fill)
+
+
+def make_status_icon(look, size):
+    """Round status badge: a circle in the status colour with a white symbol
+    (grey circle for idle / empty / skipped). Returns a PIL image."""
+    from PIL import Image, ImageDraw, ImageFont
+    name, col, _ = LOOK[look]
+    k = 8
+    S = size * k
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    muted = col == MUTED
+    d.ellipse([0, 0, S - 1, S - 1], fill=FIELD_HI if muted else col)
+    fg = TEXT if muted else "#ffffff"
+    if name == "pickaxe":
+        draw_pickaxe(d, S, fg)
+    else:
+        for path in (r"C:\Windows\Fonts\SegoeIcons.ttf", r"C:\Windows\Fonts\segmdl2.ttf"):
+            try:
+                f = ImageFont.truetype(path, int(S * 0.52))
+                d.text((S / 2, S / 2), IC[name], font=f, fill=fg, anchor="mm")
+                break
+            except Exception:
+                continue
+    return im.resize((size, size), Image.LANCZOS)
+
+
 class Box(tk.Canvas):
     """Rounded card. Put children in .body; the height follows the content."""
 
-    def __init__(self, parent, fill, radius=12, pad=(16, 14), outline=None):
+    def __init__(self, parent, fill, radius=12, pad=(16, 14), outline=None, shrink=False):
         super().__init__(parent, bg=parent["bg"], highlightthickness=0, bd=0, width=10, height=1)
-        self.fill, self.radius, self.outline = fill, radius, outline
+        self.fill, self.radius, self.outline, self.shrink = fill, radius, outline, shrink
         self.px, self.py = pad
         self.body = tk.Frame(self, bg=fill)
         self._win = self.create_window(self.px, self.py, window=self.body, anchor="nw")
@@ -1202,14 +1259,19 @@ class Box(tk.Canvas):
         self.bind("<Configure>", self._fit, add="+")
 
     def _fit(self, e=None):
-        w = self.winfo_width()
         h = self.body.winfo_reqheight() + 2 * self.py
-        if w > 2 * self.px:
-            self.itemconfigure(self._win, width=w - 2 * self.px)
+        if self.shrink:                     # as wide as the content (overlay)
+            w = self.body.winfo_reqwidth() + 2 * self.px
+            if int(float(self.cget("width"))) != w:
+                self.configure(width=w)
+        else:
+            w = self.winfo_width()
+            if w > 2 * self.px:
+                self.itemconfigure(self._win, width=w - 2 * self.px)
         if int(float(self.cget("height"))) != h:
             self.configure(height=h)
-        if w > 1 and (w, h, self.fill) != self._size:
-            self._size = (w, h, self.fill)
+        if w > 1 and (w, h, self.fill, self.outline) != self._size:
+            self._size = (w, h, self.fill, self.outline)
             self._img = rr(w, h, self.radius, self.fill, self.outline)
             self.delete("bg")
             self.create_image(0, 0, image=self._img, anchor="nw", tags="bg")
@@ -1219,6 +1281,11 @@ class Box(tk.Canvas):
         if fill != self.fill:
             old, self.fill = self.fill, fill
             recolor(self.body, old, fill)
+            self._fit()
+
+    def set_outline(self, outline):
+        if outline != self.outline:
+            self.outline = outline
             self._fit()
 
 
@@ -1475,7 +1542,8 @@ class Field(tk.Canvas):
 
 # march row look per status: (icon, colour, chip text)
 LOOK = {"idle": ("clock", MUTED, "Idle"), "walking": ("walk", ORANGE, "Marching"),
-        "update": ("sync", GOLD, "Scan now"), "gathering": ("timer", GREEN, "Gathering"),
+        "returning": ("return", ACCENT, "Returning"),
+        "update": ("sync", GOLD, "Scan now"), "gathering": ("pickaxe", GREEN, "Gathering"),
         "ready": ("warn", RED, "Resend!"), "empty": ("unknown", MUTED, "Empty"),
         "skip": ("minus", MUTED, "Skipped")}
 
@@ -1515,6 +1583,7 @@ class App:
             self.hotkeys_ok = self.register_hotkeys()
         if region is None and isinstance(cfg.get("region"), list) and len(cfg["region"]) == 4:
             self.region = [int(v) for v in cfg["region"]]
+        self._sicons = {}
         self.overlay = Overlay(self)
         self.picker = None
         self._tvis = None
@@ -1541,6 +1610,13 @@ class App:
         self.tick()
 
     # ---------- small helpers
+    def status_img(self, look, size):
+        key = (look, size)
+        if key not in self._sicons:
+            from PIL import ImageTk
+            self._sicons[key] = ImageTk.PhotoImage(make_status_icon(look, size))
+        return self._sicons[key]
+
     def mono(self, size=9):
         """Overlay font (fixed width, so the timers don't jump)."""
         return (F["mono"], size, "bold")
@@ -2445,6 +2521,8 @@ class App:
                 lines.append("GATHERING: " + ", ".join(info["gathering"]))
             if info["walking"]:
                 lines.append("MARCHING: " + ", ".join(info["walking"]))
+            if info["returning"]:
+                lines.append("RETURNING: " + ", ".join(info["returning"]))
             if info["nongather"]:
                 lines.append(f"NOT A GATHERER: {info['nongather']} march(es)")
             if info["notimer"]:
@@ -2487,7 +2565,7 @@ class App:
                     "due_epoch": s.gather_due,
                     "gather_left_s": int(s.gather_due - now) if s.gather_due else None,
                     "walk_due": s.walk_due, "start": s.start,
-                    "coords": list(s.coords) if s.coords else None, "level": s.level,
+                    "level": s.level,
                     "counted": s.counted, "alert2": s.alert2, "arrived": s.arrived,
                     "done": s.done,
                 } for i, s in enumerate(slots[:self.n]) if s.key]
@@ -2515,7 +2593,10 @@ class App:
                 walk, due, level = d.get("walk_due"), d.get("due_epoch"), d.get("level")
                 if not s.gatherer or d["key"] != s.key:
                     continue
-                if not (st in ("walking", "update") and walk or st in ("gathering", "ready") and due):
+                if st == "returning" and (not walk or walk < now):
+                    continue                   # got home while the app was closed
+                if not (st in ("walking", "update", "returning") and walk
+                        or st in ("gathering", "ready") and due):
                     continue
                 saved = GATHER_TIMES.get(s.key, {}).get("times", {}).get(level)
                 if (st == "update" or st == "walking" and not saved) and walk < now - 1800:
@@ -2524,7 +2605,6 @@ class App:
                 s.status, s.walk_due, s.gather_due = st, walk, due
                 s.start = d.get("start") or now
                 s.target, s.last_target = d.get("target"), d.get("gathering_target")
-                s.coords = tuple(d["coords"]) if d.get("coords") else None
                 s.level, s.est = level, bool(d.get("estimated"))
                 s.counted, s.alert2 = bool(d.get("counted")), bool(d.get("alert2"))
                 s.arrived = d.get("arrived")
@@ -2651,6 +2731,9 @@ class App:
                     if now > s.gather_due + 300:
                         s.reset()
                         changed = True
+                elif s.status == "returning" and s.walk_due and now >= s.walk_due:
+                    s.reset()                 # home
+                    changed = True
                 elif s.status == "walking" and s.walk_due and now >= s.walk_due:
                     secs = self.gather_secs(i, s.level) if i < self.n else None
                     s.arrived = s.walk_due
@@ -2843,12 +2926,12 @@ class App:
         else:
             look, name, sub = s.status, s.full, sub_parts(s)
         ic, col, chip = LOOK[look]
-        w["icon"].configure(text=glyph(ic), fg=col)
+        w["icon"].configure(text=glyph("timer" if ic == "pickaxe" else ic), fg=col)
         w["name"].configure(text=name, fg=WHITE if s.gatherer else MUTED)
         w["chip"].set(text=chip, fg=col)
         self.set_sub(w, sub)
         frac, text, tcol = None, "", WHITE
-        if s.gatherer and s.status == "walking" and s.walk_due:
+        if s.gatherer and s.status in ("walking", "returning") and s.walk_due:
             left = s.walk_due - now
             frac, text = left / max(1.0, s.walk_due - s.start), fmt(left)
         elif s.gatherer and s.status == "update":
@@ -2865,15 +2948,15 @@ class App:
     def load_demo(self):
         now = time.time()
         demo = [("Seondeok", "gathering", 1094, "Level 3 Gem Mine", (214, 718)),
-                ("Cleopatra VII", "gathering", 613, "Level 2 Gem Mine", (164, 629)),
+                ("Cleopatra VII", "returning", 413, None, None),
                 ("Pepin III", "walking", 278, "Level 3 Gem Mine", (154, 869)),
                 ("Ishida Mitsunari", "update", None, "Level 3 Gem Mine", None),
                 ("Queen Tamar of Georgia", "ready", 20, "Level 4 Gem Mine", (103, 668))]
         with lock:
-            for s, (key, st, secs, tgt, xy) in zip(slots, demo):
+            for s, (key, st, secs, tgt, _) in zip(slots, demo):
                 s.key, s.full, s.short, s.gatherer = key, key, GATHERERS[key], True
-                s.status, s.last_target, s.target, s.coords = st, tgt, tgt, xy
-                if st == "walking":
+                s.status, s.last_target, s.target = st, tgt, tgt
+                if st in ("walking", "returning"):
                     s.walk_due, s.start = now + secs, now - 100
                 elif secs is not None:
                     s.gather_due, s.start = now + secs, now - 200

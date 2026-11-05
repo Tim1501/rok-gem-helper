@@ -118,7 +118,7 @@ import cv2
 import numpy as np
 import pytesseract
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Notifier.exe"     # release file name (+ ".sha256" checksum file)
 HOTKEY_ACTIONS = (("scan", "Scan"), ("move", "Move"), ("clear", "Clear"))

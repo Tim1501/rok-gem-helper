@@ -133,6 +133,9 @@ DONORS_FILE = "donors.json"               # last list downloaded, for offline us
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.8", "2026-11-05", [
+        "New GitHub address: github.com/Tim1501/rok-gem-notifier",
+    ]),
     ("1.0.7", "2026-11-05", [
         "New name: ROK Gem Notifier, with a new icon",
         "App name shown in red at the top",

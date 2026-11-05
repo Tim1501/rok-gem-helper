@@ -86,6 +86,17 @@ Click **Update now**: it downloads the new version, checks it, and restarts.
 Your saved data is kept. What changed is listed under **What's new** in the app
 and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
 
+## Reporting a bug
+
+1. In the app, click **Generate Bug Report** (bottom of the sidebar).
+2. A zip file appears on your Desktop, for example
+   `ROK Gem Helper bug report 2026-11-05 1530.zip`. It contains the app's error log,
+   your settings and timers, basic system info (Windows version, screen size), and
+   the screenshot of your last failed scan, if there was one. Have a look at that
+   screenshot before sending if you are worried about chat or names in it.
+3. Send the zip to **@ChanaMasala** on Discord, with a short description: what you
+   did, what you expected, and what happened. A screenshot of the app helps too.
+
 ## Repository layout
 
 | Path | What it is |

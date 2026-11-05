@@ -71,6 +71,10 @@ Publishing: raise APP_VERSION, build, then make a GitHub release tagged vX.Y.Z w
 ROK-Gem-Helper.exe and ROK-Gem-Helper.exe.sha256 attached:
          add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
+Bugs:    errors are written to data/error.log. "Generate Bug Report" (sidebar) zips
+         error.log, settings, timers, the last failed scan and system_info.txt onto
+         the Desktop for sending.
+
 Hotkeys:  F8 = scan    F9 = unlock/lock overlay for dragging    F10 = clear timers
           (change them in Settings > Hotkeys; saved in march_settings.json)
 
@@ -323,7 +327,7 @@ IC = {"scan": "", "settings": "", "info": "", "sound": "",
       "lock": "", "unlock": "", "down": "", "up": "",
       "walk": "", "reset": "", "smart": "", "log": "",
       "warn": "", "sync": "", "people": "", "minus": "",
-      "unknown": "", "heart": "", "keyboard": ""}
+      "unknown": "", "heart": "", "keyboard": "", "bug": "\uebe8"}
 
 
 # ================================================================ core
@@ -1025,6 +1029,48 @@ def latest_release():
             "exe": urls[UPDATE_ASSET], "sha": urls[UPDATE_ASSET + ".sha256"]}
 
 
+ERROR_LOG = "error.log"
+
+
+def log_error(where, exc=None):
+    """Append an error with its traceback to error.log in the data folder (kept small)."""
+    import traceback
+    try:
+        tb = traceback.format_exc() if exc is None else \
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        try:
+            if os.path.getsize(ERROR_LOG) > 300_000:
+                with open(ERROR_LOG, encoding="utf-8", errors="replace") as f:
+                    keep = f.read()[-150_000:]
+                with open(ERROR_LOG, "w", encoding="utf-8") as f:
+                    f.write(keep)
+        except OSError:
+            pass
+        with open(ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}  v{APP_VERSION}  [{where}]\n{tb.rstrip()}\n\n")
+    except Exception:
+        pass
+
+
+def install_error_log():
+    """Errors that would otherwise vanish (crashes, background threads) go to error.log."""
+    sys.excepthook = lambda typ, exc, tb: log_error("crash", exc)
+    threading.excepthook = lambda a: log_error(f"thread {getattr(a.thread, 'name', '')}", a.exc_value)
+
+
+def desktop_dir():
+    """The user's Desktop (also when OneDrive moved it), or None."""
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 0x10, None, 0, buf) == 0 and buf.value:
+            return buf.value
+    except Exception:
+        pass
+    d = os.path.join(os.path.expanduser("~"), "Desktop")
+    return d if os.path.isdir(d) else None
+
+
 def key_label(key):
     """'ctrl+shift+f8' -> 'Ctrl+Shift+F8' (how a hotkey is shown)."""
     return "+".join(p.upper() if len(p) == 1 or re.fullmatch(r"f\d+", p) else p.title()
@@ -1476,6 +1522,8 @@ class App:
         self.tray = None
         self.update_rel, self.updating = None, False
         root.protocol("WM_DELETE_WINDOW", self.quit_app)
+        root.report_callback_exception = lambda typ, exc, tb: self.ui_error("ui", exc)
+        self._last_err = None
         if not demo:
             self.load_slots()
             load_times()
@@ -1588,7 +1636,12 @@ class App:
             self.key_chips[action].pack(side="left", padx=(0, 5))
         Pill(foot, "Donate", glyph("heart"), self.donate, fill="#3a1f2c", hover="#4a2638",
              fg=WHITE, icon_fg=PINK, h=34, size=9, width=204, radius=9,
-             tip="Like the app? Support it on PayPal").pack(anchor="w", pady=(0, 10))
+             tip="Like the app? Support it on PayPal").pack(anchor="w", pady=(0, 6))
+        Pill(foot, "Generate Bug Report", glyph("bug"), self.report_bug, fill=FIELD, hover=FIELD_HI,
+             fg=WHITE, icon_fg=TEXT, h=34, size=9, width=204, radius=9,
+             tip="Saves one zip on your Desktop with the error log, your settings and the last "
+                 "failed scan. Send it on Discord with a short description of the problem."
+             ).pack(anchor="w", pady=(0, 10))
         self.label(foot, "Found a bug? Contact", MUTED, 8).pack(anchor="w")
         bug = self.label(foot, f"@{DISCORD_NAME} on Discord", "#8ea1f0", 9, "semi", cursor="hand2")
         bug.pack(anchor="w")
@@ -1602,7 +1655,8 @@ class App:
         default; False when the keyboard hook isn't available at all."""
         try:
             import keyboard
-        except Exception:
+        except Exception as e:
+            log_error("hotkeys", e)
             return False
         self.unbind_hotkeys()
         for action in self.keys:
@@ -1611,7 +1665,8 @@ class App:
                     self._hk.append(keyboard.add_hotkey(key, lambda a=action: self.q.put((a,))))
                     self.keys[action] = key
                     break
-                except Exception:
+                except Exception as e:
+                    log_error(f"hotkey {key}", e)
                     continue
         return bool(self._hk)
 
@@ -1642,7 +1697,8 @@ class App:
             import keyboard
             self.unbind_hotkeys()              # the old keys must not fire while choosing
             key = keyboard.read_hotkey(suppress=False)
-        except Exception:
+        except Exception as e:
+            log_error("hotkey capture", e)
             key = None
         self.q.put(("hotkey", key))
 
@@ -1684,6 +1740,59 @@ class App:
                                       fill=ACCENT if busy else FIELD,
                                       hover=ACCENT_HI if busy else FIELD_HI)
             self.key_chips[action].set(text=f"{key_label(self.keys[action])} {what}")
+
+    def report_bug(self):
+        """Zip error.log, settings, timers and the last failed scan onto the Desktop."""
+        import subprocess
+        import zipfile
+        name = f"ROK Gem Helper bug report {time.strftime('%Y-%m-%d %H%M')}.zip"
+        folder = desktop_dir() or os.getcwd()
+        path = os.path.join(folder, name)
+        files = [f for f in (ERROR_LOG, "scan_debug.png", "scan_debug.txt", SETTINGS_FILE, TIMES_FILE,
+                             SMART_FILE, STATE_FILE, SLOTS_FILE) if os.path.exists(f)]
+        try:
+            self.save_state()
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("system_info.txt", self.system_info())
+                for f in files:
+                    z.write(f, f)
+        except Exception as e:
+            log_error("bug report", e)
+            self.set_result(f"!BUG REPORT FAILED: {e}")
+            return
+        try:
+            subprocess.Popen(["explorer", "/select,", path])
+        except Exception:
+            pass
+        where = "on your Desktop" if folder != os.getcwd() else "in the data folder"
+        msg = f"BUG REPORT: saved '{name}' {where} - send it to @{DISCORD_NAME} on Discord"
+        if "scan_debug.png" in files:
+            msg += "\nNOTE: it includes a screenshot of your last failed scan - check it before sending"
+        self.set_result(msg)
+
+    def system_info(self):
+        import platform
+        lines = [f"ROK Gem Helper v{APP_VERSION}", f"Made: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+                 f"Windows: {platform.platform()}", f"Running as exe: {bool(getattr(sys, 'frozen', False))}",
+                 f"Screen (app): {self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}"]
+        try:
+            import mss
+            with mss.mss() as sct:
+                m = sct.monitors[1]
+            lines.append(f"Screen (capture): {m['width']}x{m['height']} at {m['left']},{m['top']}"
+                         f", {len(sct.monitors) - 1} monitor(s)")
+        except Exception as e:
+            lines.append(f"Screen (capture): unknown ({e})")
+        try:
+            lines.append(f"Tesseract: {pytesseract.get_tesseract_version()} "
+                         f"({pytesseract.pytesseract.tesseract_cmd})")
+        except Exception as e:
+            lines.append(f"Tesseract: NOT FOUND ({type(e).__name__})")
+        lines += [f"Hotkeys working: {self.hotkeys_ok}  {self.keys}",
+                  f"Scan area: {self.region or 'whole screen'}", f"Marches: {self.n}",
+                  f"Lead: {self.lead.get()}s  Sound: {self.sound_on}  Smart Gather: {self.smart_on}",
+                  f"Overlay: {self.overlay.visible()}"]
+        return "\n".join(lines) + "\n"
 
     def donate(self):
         import webbrowser
@@ -2336,6 +2445,7 @@ class App:
             self.q.put(("lock_if_filled",))
             self.q.put(("save",))
         except Exception as e:
+            log_error("scan", e)
             self.q.put(("show",))
             self.q.put(("msg", f"!SCAN FAILED: {e}", RED))
         finally:
@@ -2468,6 +2578,26 @@ class App:
                 self.scan_btn.set(text="Scan")
 
     def tick(self):
+        """Runs 5x a second. An error in one round is logged and the timers keep going."""
+        try:
+            self._tick()
+        except Exception as e:
+            self.ui_error("tick", e)
+        self.root.after(200, self.tick)
+
+    def ui_error(self, where, exc):
+        sig = (where, type(exc).__name__, str(exc))
+        if sig == self._last_err:            # the same error every tick: log it once
+            return
+        self._last_err = sig
+        log_error(where, exc)
+        try:
+            self.set_result(f"!ERROR: {type(exc).__name__}: {exc} - saved to error.log, "
+                            "use Generate Bug Report to send it")
+        except Exception:
+            pass
+
+    def _tick(self):
         self.drain()
         self.tick_n += 1
         now, lead = time.time(), self.lead.get()
@@ -2519,7 +2649,6 @@ class App:
         self.gem_day.configure(text=f"{GEMS['daily']:,}")
         if changed:
             self.save_state()
-        self.root.after(200, self.tick)
 
     # ---------- system tray
     def minimize_to_tray(self):
@@ -2532,6 +2661,7 @@ class App:
             if os.name != "nt" and isinstance(e, (ImportError, ValueError)) and "pystray" in str(e) and "_win32" in str(e):
                 pass  # not Windows: the Windows backend is irrelevant here
             else:
+                log_error("tray", e)
                 self.set_result(f"!TRAY UNAVAILABLE: could not load pystray ({type(e).__name__}: {e}). "
                                 "Run  pip install pystray  and rebuild the exe")
                 return
@@ -2546,6 +2676,7 @@ class App:
                                      "ROK Gem Helper", menu)
             self.tray.run_detached()
         except Exception as e:
+            log_error("tray", e)
             self.tray = None
             self.set_result(f"!TRAY FAILED: {e}")
             return
@@ -2654,6 +2785,7 @@ class App:
                 raise
             self.q.put(("restart", exe))
         except Exception as e:
+            log_error("update", e)
             self.q.put(("update_failed", str(e)))
 
     def restart(self, exe):
@@ -2796,6 +2928,7 @@ def main():
         return
 
     use_data_dir()
+    install_error_log()
 
     root = tk.Tk()
     app_box = {}

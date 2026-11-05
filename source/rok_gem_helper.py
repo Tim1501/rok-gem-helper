@@ -77,6 +77,12 @@ Publishing: raise APP_VERSION, build, then make a GitHub release tagged vX.Y.Z w
 ROK-Gem-Helper.exe and ROK-Gem-Helper.exe.sha256 attached:
          add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
+Donators: sidebar "Top Donators" opens a leaderboard page (Back returns). The list
+         is donors.json in the GitHub repository (DONORS_URL), downloaded when the
+         page opens and saved to data/donors.json for offline use:
+         {"currency": "$", "updated": "2026-11-05",
+          "donors": [{"name": "Someone", "amount": 10, "message": "optional"}]}
+
 Bugs:    errors are written to data/error.log. "Generate Bug Report" (sidebar) zips
          error.log, settings, timers, the last failed scan and system_info.txt onto
          the Desktop for sending.
@@ -121,6 +127,8 @@ MODIFIERS = {"ctrl", "shift", "alt", "windows", "left ctrl", "right ctrl", "left
              "right shift", "left alt", "right alt", "alt gr", "left windows", "right windows"}
 DONATE_URL = "https://paypal.me/DeepTak646"
 DISCORD_NAME = "ChanaMasala"
+DONORS_URL = "https://raw.githubusercontent.com/Tim1501/rok-gem-helper/main/donors.json"
+DONORS_FILE = "donors.json"               # last list downloaded, for offline use
 
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
@@ -332,7 +340,7 @@ IC = {"scan": "", "settings": "", "info": "", "sound": "",
       "lock": "", "unlock": "", "down": "", "up": "",
       "walk": "", "reset": "", "smart": "", "log": "",
       "warn": "", "sync": "", "people": "", "minus": "",
-      "unknown": "", "return": "\ue7a7", "heart": "", "keyboard": "", "bug": "\uebe8"}
+      "unknown": "", "return": "\ue7a7", "heart": "", "keyboard": "", "bug": "\uebe8", "star": "\ue735", "back": "\ue72b"}
 
 
 # ================================================================ core
@@ -1084,6 +1092,47 @@ def desktop_dir():
     return d if os.path.isdir(d) else None
 
 
+def parse_donors(data):
+    """donors.json -> (currency, updated, [(name, amount, message)] highest first).
+    Anything malformed is skipped."""
+    cur = str(data.get("currency") or "$")[:4]
+    out = []
+    for d in data.get("donors") or []:
+        try:
+            name = str(d["name"]).strip()[:40]
+            amount = float(d.get("amount") or 0)
+        except Exception:
+            continue
+        if name:
+            out.append((name, amount, str(d.get("message") or "").strip()[:90]))
+    out.sort(key=lambda x: -x[1])
+    return cur, str(data.get("updated") or "")[:20], out
+
+
+def fmt_money(cur, amount):
+    return f"{cur}{amount:,.0f}" if amount == int(amount) else f"{cur}{amount:,.2f}"
+
+
+def fetch_donors():
+    """Download the list from GitHub (saved for offline use); fall back to the saved one.
+    Returns (data or None, online)."""
+    try:
+        with http_get(DONORS_URL, 10) as r:
+            data = json.load(r)
+        try:
+            with open(DONORS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError:
+            pass
+        return data, True
+    except Exception:
+        try:
+            with open(DONORS_FILE, encoding="utf-8") as f:
+                return json.load(f), False
+        except Exception:
+            return None, False
+
+
 def key_label(key):
     """'ctrl+shift+f8' -> 'Ctrl+Shift+F8' (how a hotkey is shown)."""
     return "+".join(p.upper() if len(p) == 1 or re.fullmatch(r"f\d+", p) else p.title()
@@ -1670,7 +1719,9 @@ class App:
         self.build_log(main)
         self.scroll = Scroll(main, BG)
         self.scroll.pack(fill="both", expand=True, padx=(28, 10), pady=(0, 14))
-        self.root.bind_all("<MouseWheel>", self.scroll.wheel)
+        self.build_board(main)
+        self.root.bind_all("<MouseWheel>", lambda e: (self.board if self.board.winfo_manager()
+                                                       else self.scroll).wheel(e))
         self.sec = {}
         self.build_marches(self.scroll.body)
         self.build_times(self.scroll.body)
@@ -1703,6 +1754,9 @@ class App:
             Pill(sd, name, glyph(ic), lambda k=key: self.goto(k), fill=SIDEBAR, hover=FIELD,
                  fg=WHITE, icon_fg=TEXT, h=38, size=10, width=204, radius=9, anchor="w",
                  padx=12).pack(padx=16, pady=1, anchor="w")
+        Pill(sd, "Top Donators", glyph("star"), self.show_board, fill=SIDEBAR, hover=FIELD,
+             fg=WHITE, icon_fg=GOLD, h=38, size=10, width=204, radius=9, anchor="w", padx=12,
+             tip="Everyone who supports the app").pack(padx=16, pady=1, anchor="w")
 
         foot = tk.Frame(sd, bg=SIDEBAR)
         foot.pack(side="bottom", fill="x", padx=16, pady=(0, 16))
@@ -1966,6 +2020,92 @@ class App:
         for b in (self.tray_btn, self.ov_btn, self.move_btn, self.clear_btn):
             b.pack(side="right", padx=(0, 10))
 
+    # ---------- Top Donators page
+    def build_board(self, m):
+        """Full-page leaderboard that replaces the cards until Back is clicked."""
+        self.board = Scroll(m, BG)
+        b = self.board.body
+        top = Box(b, CARD, radius=14, pad=(20, 16), outline=BORDER)
+        top.pack(fill="x", pady=(0, 16))
+        head = tk.Frame(top.body, bg=CARD)
+        head.pack(fill="x")
+        Pill(head, "Back", glyph("back"), self.hide_board, h=34, size=9, fill=FIELD,
+             hover=FIELD_HI, tip="Back to the timers").pack(side="left")
+        self.icon(head, "star", GOLD, 14).pack(side="left", padx=(16, 8))
+        self.label(head, "Top Donators", WHITE, 15, "semi").pack(side="left")
+        Pill(head, "Donate", glyph("heart"), self.donate, fill="#3a1f2c", hover="#4a2638",
+             fg=WHITE, icon_fg=PINK, h=34, size=9, padx=16,
+             tip="Support the app on PayPal").pack(side="right")
+        self.label(top.body, "Thank you to everyone who keeps ROK Gem Helper going! Donate any "
+                             f"amount and tell @{DISCORD_NAME} on Discord the name to show here.",
+                   TEXT, 9, wraplength=760, justify="left", anchor="w").pack(fill="x", pady=(12, 0))
+        self.board_note = self.label(top.body, "", MUTED, 8, anchor="w")
+        self.board_note.pack(fill="x", pady=(4, 0))
+        self.board_list = tk.Frame(b, bg=BG)
+        self.board_list.pack(fill="x")
+        self._medals = {}
+
+    def show_board(self):
+        if not self.board.winfo_manager():
+            self.scroll.pack_forget()
+            self.board.pack(fill="both", expand=True, padx=(28, 10), pady=(0, 14))
+        self.board_note.configure(text="Loading the list...")
+        threading.Thread(target=lambda: self.q.put(("donors",) + fetch_donors()), daemon=True).start()
+
+    def hide_board(self):
+        if self.board.winfo_manager():
+            self.board.pack_forget()
+            self.scroll.pack(fill="both", expand=True, padx=(28, 10), pady=(0, 14))
+
+    def medal(self, rank):
+        """Round rank badge: gold / silver / bronze for the top 3, grey after."""
+        if rank not in self._medals:
+            from PIL import Image, ImageDraw, ImageFont, ImageTk
+            col, fg = {1: ("#e9c24f", "#3a2a00"), 2: ("#c3c9d2", "#22262c"),
+                       3: ("#cd8a4f", "#2d1806")}.get(rank, (FIELD_HI, TEXT))
+            S = 34 * 8
+            im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            d.ellipse([0, 0, S - 1, S - 1], fill=col)
+            try:
+                f = ImageFont.truetype(r"C:\Windows\Fonts\seguisb.ttf", int(S * 0.42))
+                d.text((S / 2, S / 2), str(rank), font=f, fill=fg, anchor="mm")
+            except Exception:
+                pass
+            self._medals[rank] = ImageTk.PhotoImage(im.resize((34, 34), Image.LANCZOS))
+        return self._medals[rank]
+
+    def show_donors(self, data, online):
+        for w in self.board_list.winfo_children():
+            w.destroy()
+        if data is None:
+            self.board_note.configure(text="Couldn't load the list - check your internet and try again.")
+            return
+        cur, updated, donors = parse_donors(data)
+        note = f"Updated {updated}" if updated else ""
+        if not online:
+            note = ("Offline - showing the list saved last time. " + note).strip()
+        self.board_note.configure(text=note)
+        if not donors:
+            box = Box(self.board_list, GROUP, radius=12, pad=(20, 18))
+            box.pack(fill="x")
+            self.label(box.body, "No donators yet - be the first!", WHITE, 11, "semi").pack(anchor="w")
+            self.label(box.body, "Your name could be at the top of this list.", MUTED, 9).pack(anchor="w")
+            return
+        for rank, (name, amount, msg) in enumerate(donors, 1):
+            box = Box(self.board_list, GROUP, radius=12, pad=(16, 10))
+            box.pack(fill="x", pady=(0, 8))
+            rb = box.body
+            tk.Label(rb, image=self.medal(rank), bg=GROUP, bd=0).pack(side="left", padx=(0, 14))
+            mid = tk.Frame(rb, bg=GROUP)
+            mid.pack(side="left", fill="x", expand=True)
+            self.label(mid, name, WHITE if rank > 3 else GOLD if rank == 1 else WHITE,
+                       12 if rank <= 3 else 11, "semi", anchor="w").pack(anchor="w")
+            if msg:
+                self.label(mid, f'"{msg}"', MUTED, 9, anchor="w").pack(anchor="w")
+            self.label(rb, fmt_money(cur, amount), GREEN, 13 if rank <= 3 else 11, "semi"
+                       ).pack(side="right")
+
     def build_update_bar(self, m):
         self.upd_box = Box(m, "#152238", radius=14, pad=(18, 10), outline="#24406b")
         ub = self.upd_box.body
@@ -2028,6 +2168,7 @@ class App:
             self.save_settings()
 
     def goto(self, key):
+        self.hide_board()
         if key in self.collapsed:
             self.toggle_section(key)
         self.scroll.scroll_to(self.sec[key]["box"])
@@ -2681,6 +2822,8 @@ class App:
                 self.save_slots()
             elif k == "hotkey":
                 self.set_key(item[1])
+            elif k == "donors":
+                self.show_donors(item[1], item[2])
             elif k == "update":
                 self.show_update(item[1])
             elif k == "restart":
@@ -2854,7 +2997,8 @@ class App:
         self.upd_text.configure(text=f"Update available: v{rel['version']}"
                                      + (f"  -  {first[:90]}" if first else ""))
         if not self.upd_box.winfo_manager():
-            self.upd_box.pack(fill="x", padx=(28, 24), pady=(0, 14), before=self.scroll)
+            self.upd_box.pack(fill="x", padx=(28, 24), pady=(0, 14),
+                              before=self.board if self.board.winfo_manager() else self.scroll)
 
     def start_update(self):
         if self.updating or not self.update_rel:

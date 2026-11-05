@@ -107,6 +107,7 @@ and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
 | `source/assets/` | Icon, logo and screenshot |
 | `source/ROKGemHelper.spec` | Build settings for the exe (PyInstaller) |
 | `source/release.py` | Builds and publishes a new version |
+| `donors.json` | The Top Donators list the app shows (edit it to add a donator) |
 
 Run from source: `pip install mss pytesseract pillow opencv-python keyboard plyer pystray`,
 then `python source/rok_gem_helper.py`.
@@ -121,6 +122,9 @@ and new features can sometimes take a while - thank you for your patience.
 If the app helps you, please consider supporting it on PayPal:
 **[paypal.me/DeepTak646](https://paypal.me/DeepTak646)** (or the **Donate** button in
 the app). Any amount is greatly appreciated and really helps me keep working on it.
+
+Everyone who donates (and wants to be named) is listed on the **Top Donators** board
+in the app - just tell me on Discord which name to show.
 
 Found a bug or have an idea? Message me on Discord: **@ChanaMasala**.
 

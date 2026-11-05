@@ -8,9 +8,23 @@
 
 <p align="center">
   <a href="https://github.com/Tim1501/rok-gem-notifier/releases/latest"><b>Download the latest version</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://youtu.be/PvIK_sj5ILw"><b>Watch the setup video</b></a>
 </p>
 
 ![ROK Gem Notifier](source/assets/screenshot.png)
+
+## Video guide
+
+New here? This 8-minute video shows everything: installing, first setup, scanning
+your marches, the overlay, Smart Gather and more. Click the picture to watch it on YouTube.
+
+<p align="center">
+  <a href="https://youtu.be/PvIK_sj5ILw">
+    <img src="https://img.youtube.com/vi/PvIK_sj5ILw/maxresdefault.jpg" width="640"
+         alt="ROK Gem Notifier - setup video on YouTube">
+  </a>
+</p>
 
 ## What it does
 

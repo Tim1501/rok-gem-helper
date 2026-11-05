@@ -1465,6 +1465,7 @@ class App:
         saved = cfg.get("hotkeys") if isinstance(cfg.get("hotkeys"), dict) else {}
         self.keys = {a: str(saved.get(a) or d).lower() for a, d in DEFAULT_KEYS.items()}
         self.capturing = None
+        self._hk = []                         # handles of the hotkeys this app bound
         if not demo:
             self.hotkeys_ok = self.register_hotkeys()
         if region is None and isinstance(cfg.get("region"), list) and len(cfg["region"]) == 4:
@@ -1601,18 +1602,29 @@ class App:
         default; False when the keyboard hook isn't available at all."""
         try:
             import keyboard
-            keyboard.unhook_all_hotkeys()
         except Exception:
             return False
+        self.unbind_hotkeys()
         for action in self.keys:
             for key in (self.keys[action], DEFAULT_KEYS[action]):
                 try:
-                    keyboard.add_hotkey(key, lambda a=action: self.q.put((a,)))
+                    self._hk.append(keyboard.add_hotkey(key, lambda a=action: self.q.put((a,))))
                     self.keys[action] = key
                     break
                 except Exception:
                     continue
-        return True
+        return bool(self._hk)
+
+    def unbind_hotkeys(self):
+        """Remove only our own hotkeys (keyboard.unhook_all_hotkeys crashes when the
+        keyboard hook hasn't started yet)."""
+        import keyboard
+        for h in self._hk:
+            try:
+                keyboard.remove_hotkey(h)
+            except Exception:
+                pass
+        self._hk = []
 
     def capture_key(self, action):
         if not self.hotkeys_ok:
@@ -1628,7 +1640,7 @@ class App:
     def _read_key(self):
         try:
             import keyboard
-            keyboard.unhook_all_hotkeys()      # the old keys must not fire while choosing
+            self.unbind_hotkeys()              # the old keys must not fire while choosing
             key = keyboard.read_hotkey(suppress=False)
         except Exception:
             key = None

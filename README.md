@@ -7,7 +7,7 @@
 <p align="center">Gem march timers for <b>Rise of Kingdoms</b> on PC</p>
 
 <p align="center">
-  <a href="https://github.com/Tim1501/rok-gem-helper/releases/latest"><b>Download the latest version</b></a>
+  <a href="https://github.com/Tim1501/rok-gem-notifier/releases/latest"><b>Download the latest version</b></a>
 </p>
 
 ![ROK Gem Notifier](source/assets/screenshot.png)
@@ -44,7 +44,7 @@ gather ends, so you can send the march on right away.
    [download it here](https://github.com/UB-Mannheim/tesseract/wiki) and keep the
    default install folder.
 2. Download **ROK-Gem-Notifier.exe** from the
-   [latest release](https://github.com/Tim1501/rok-gem-helper/releases/latest)
+   [latest release](https://github.com/Tim1501/rok-gem-notifier/releases/latest)
    and put it in a folder of its own (for example `Documents\ROK Gem Notifier`).
 3. Double-click it. Windows asks for administrator rights; that is needed for the
    F8 / F9 / F10 hotkeys to work while the game window is active.
@@ -86,7 +86,7 @@ level 4 = 40). Commander talents and buffs are not included.
 When a new version is published, the app shows **Update available** at the top.
 Click **Update now**: it downloads the new version, checks it, and restarts.
 Your saved data is kept. What changed is listed under **What's new** in the app
-and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
+and on the [releases page](https://github.com/Tim1501/rok-gem-notifier/releases).
 
 ## Reporting a bug
 

@@ -119,7 +119,7 @@ import numpy as np
 import pytesseract
 
 APP_VERSION = "1.0.7"
-UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
+UPDATE_REPO = "Tim1501/rok-gem-notifier"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Notifier.exe"     # release file name (+ ".sha256" checksum file)
 HOTKEY_ACTIONS = (("scan", "Scan"), ("move", "Move"), ("clear", "Clear"))
 DEFAULT_KEYS = {"scan": "f8", "move": "f9", "clear": "f10"}
@@ -127,7 +127,7 @@ MODIFIERS = {"ctrl", "shift", "alt", "windows", "left ctrl", "right ctrl", "left
              "right shift", "left alt", "right alt", "alt gr", "left windows", "right windows"}
 DONATE_URL = "https://paypal.me/DeepTak646"
 DISCORD_NAME = "ChanaMasala"
-DONORS_URL = "https://raw.githubusercontent.com/Tim1501/rok-gem-helper/main/donors.json"
+DONORS_URL = "https://raw.githubusercontent.com/Tim1501/rok-gem-notifier/main/donors.json"
 DONORS_FILE = "donors.json"               # last list downloaded, for offline use
 
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the

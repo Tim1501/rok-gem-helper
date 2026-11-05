@@ -74,7 +74,7 @@ is newer than APP_VERSION a banner offers "Update now": the new exe is downloade
 checked against its .sha256 file, swapped in (the old one is renamed to .old and
 deleted on the next start) and the app restarts. Data files are not touched.
 Publishing: raise APP_VERSION, build, then make a GitHub release tagged vX.Y.Z with
-ROK-Gem-Notifier.exe and its .sha256 attached (and ROK-Gem-Helper.exe for old copies):
+ROK-Gem-Notifier.exe and its .sha256 attached:
          add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
 Donators: sidebar "Top Donators" opens a leaderboard page (Back returns). The list

@@ -9,7 +9,6 @@ shown in the app's "What's new" and becomes the release notes). Then this:
 2. builds the exe and puts it next to the source folder ("ROK Gem Notifier.exe")
 3. commits and pushes the code
 4. creates the GitHub release v1.1.0 with ROK-Gem-Notifier.exe + its .sha256 file
-   (plus the same exe as ROK-Gem-Helper.exe, the name copies up to v1.0.6 look for)
 
 Everyone running an older copy then sees "Update available" on their next start.
 Needs the GitHub CLI (gh), signed in once with:  gh auth login
@@ -27,7 +26,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))       # source/
 ROOT = os.path.dirname(HERE)                            # app folder / repository
 APP = os.path.join(HERE, "rok_gem_notifier.py")
 ASSET = "ROK-Gem-Notifier.exe"
-LEGACY_ASSET = "ROK-Gem-Helper.exe"     # old name: v1.0.0-v1.0.6 only update from this file
 
 
 def gh():
@@ -72,14 +70,12 @@ def main():
     built = os.path.join(work, "dist", "ROK Gem Notifier.exe")
 
     out = tempfile.mkdtemp(prefix="rgh_release_")
-    files = []
-    for name in (ASSET, LEGACY_ASSET):
-        exe = os.path.join(out, name)
-        shutil.copyfile(built, exe)
-        digest = hashlib.sha256(open(exe, "rb").read()).hexdigest()
-        with open(exe + ".sha256", "w") as f:
-            f.write(f"{digest}  {name}\n")
-        files += [exe, exe + ".sha256"]
+    exe = os.path.join(out, ASSET)
+    shutil.copyfile(built, exe)
+    digest = hashlib.sha256(open(exe, "rb").read()).hexdigest()
+    with open(exe + ".sha256", "w") as f:
+        f.write(f"{digest}  {ASSET}\n")
+    files = [exe, exe + ".sha256"]
     try:
         shutil.copyfile(built, os.path.join(ROOT, "ROK Gem Notifier.exe"))
     except OSError:

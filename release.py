@@ -74,7 +74,8 @@ def main():
     try:
         shutil.copyfile(built, os.path.join(HERE, "dist", "ROK Gem Helper.exe"))
     except OSError:
-        print("dist/ROK Gem Helper.exe is open, so it was not replaced - it will offer the update itself")
+        print("dist/ROK Gem Helper.exe is open, so it was not replaced; "
+              "copies from v1.0.0 on will offer the update themselves")
     shutil.rmtree(work, ignore_errors=True)
     digest = hashlib.sha256(open(exe, "rb").read()).hexdigest()
     with open(exe + ".sha256", "w") as f:

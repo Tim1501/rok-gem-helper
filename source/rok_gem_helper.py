@@ -18,7 +18,7 @@ Per scan:
                                     (the mine it was last seen marching to)
    "Returning 00:xx:xx"          -> going home: countdown, then the row goes idle
 Overlay rows start with a dot: filled green = gathering, hollow yellow =
-marching, red cross = returning, or a gather that is done (NOW).
+marching, red cross = returning, red slashed circle = gather done (NOW).
 Coordinates on screen are not read.
 If only some rows are visible: scan, scroll, scan again.
 If a new commander shows up and every slot is taken (e.g. a fighting march was
@@ -1273,7 +1273,7 @@ class Tip:
 
 def make_dot(look, size):
     """Overlay status mark: filled green dot = gathering, hollow yellow ring =
-    marching, red cross = returning or a gather that is done ("NOW"); nothing else."""
+    marching, red cross = returning, red slashed circle = gather done ("NOW"); nothing else."""
     from PIL import Image, ImageDraw
     k = 8
     S = size * k
@@ -1284,7 +1284,11 @@ def make_dot(look, size):
         d.ellipse([m, m, S - m, S - m], fill=GREEN)
     elif look == "walking":
         d.ellipse([m, m, S - m, S - m], outline=GOLD, width=w)
-    elif look in ("returning", "done"):
+    elif look == "done":                    # red "no entry" sign: ring + slash
+        d.ellipse([m, m, S - m, S - m], outline=RED, width=w)
+        a, b = S * 0.70, S * 0.30
+        d.line([(a, m + w * 0.6), (b, S - m - w * 0.6)], fill=RED, width=w)
+    elif look == "returning":
         for a, b in (((m, m), (S - m, S - m)), ((m, S - m), (S - m, m))):
             d.line([a, b], fill=RED, width=w)
             for x, y in (a, b):
@@ -2039,8 +2043,9 @@ class App:
              fg=WHITE, icon_fg=PINK, h=34, size=9, padx=16,
              tip="Support the app on PayPal").pack(side="right")
         self.label(top.body, "Tysm for being absolute beasts, for both using and donating to my "
-                             "tiny app. Even you using it is awesome :p If you have any messages, "
-                             "make sure to write them in a note when donating on PayPal.\n"
+                             "tiny app. Even you using it is awesome :p\n"
+                             "If you have any messages, make sure to write them in a note when "
+                             "donating on PayPal.\n"
                              "It might take a while for me to update the list since I do it "
                              "manually, but thanks again :p",
                    TEXT, 9, wraplength=760, justify="left", anchor="w").pack(fill="x", pady=(12, 0))

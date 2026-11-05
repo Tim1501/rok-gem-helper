@@ -110,6 +110,10 @@ DISCORD_NAME = "ChanaMasala"
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.2", "2026-11-05", [
+        "Donate button in the sidebar - any support is appreciated",
+        "Found a bug? Contact @ChanaMasala on Discord (click the name to copy it)",
+    ]),
     ("1.0.1", "2026-11-05", [
         "Tidier folder: your saved files now live in a 'data' folder",
         "Only works with the game set to English for now",

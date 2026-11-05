@@ -95,12 +95,20 @@ and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
 Run from source: `pip install mss pytesseract pillow opencv-python keyboard plyer pystray`,
 then `python source/rok_gem_helper.py`.
 
-## Support
+## A note from the developer
 
-ROK Gem Helper is free. If it saves you time, you can support it with a donation:
-[paypal.me/DeepTak646](https://paypal.me/DeepTak646) (also the **Donate** button in the app).
+Hey, thanks for trying ROK Gem Helper!
 
-Found a bug? Contact **@ChanaMasala** on Discord.
+I make this app as a hobby, in my free time after my day job. That means bug fixes
+and new features can sometimes take a while - thank you for your patience.
+
+If the app helps you, please consider supporting it on PayPal:
+**[paypal.me/DeepTak646](https://paypal.me/DeepTak646)** (or the **Donate** button in
+the app). Any amount is greatly appreciated and really helps me keep working on it.
+
+Found a bug or have an idea? Message me on Discord: **@ChanaMasala**.
+
+\- ChanaMasala
 
 ---
 

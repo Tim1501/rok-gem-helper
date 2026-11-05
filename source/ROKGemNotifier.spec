@@ -6,7 +6,7 @@ hiddenimports += collect_submodules('pystray')
 
 
 a = Analysis(
-    ['rok_gem_helper.py'],
+    ['rok_gem_notifier.py'],
     pathex=[],
     binaries=[],
     datas=[('assets/logo.png', 'assets'), ('assets/app_icon.png', 'assets')],
@@ -26,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='ROK Gem Helper',
+    name='ROK Gem Notifier',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

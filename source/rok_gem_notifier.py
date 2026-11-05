@@ -1,5 +1,5 @@
 """
-ROK Gem Helper - gem march timers for Rise of Kingdoms
+ROK Gem Notifier - gem march timers for Rise of Kingdoms
 ------------------------------------------------------
 Reads the Troops list on your screen and keeps one timer per march.
 
@@ -74,7 +74,7 @@ is newer than APP_VERSION a banner offers "Update now": the new exe is downloade
 checked against its .sha256 file, swapped in (the old one is renamed to .old and
 deleted on the next start) and the app restarts. Data files are not touched.
 Publishing: raise APP_VERSION, build, then make a GitHub release tagged vX.Y.Z with
-ROK-Gem-Helper.exe and ROK-Gem-Helper.exe.sha256 attached:
+ROK-Gem-Notifier.exe and its .sha256 attached (and ROK-Gem-Helper.exe for old copies):
          add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
 Donators: sidebar "Top Donators" opens a leaderboard page (Back returns). The list
@@ -97,7 +97,7 @@ Setup (Windows):
 Files:   the app keeps everything it saves (gems, times, settings, logs) in a
          "data" folder next to the exe; files from older versions are moved in.
 
-Run:     python rok_gem_helper.py
+Run:     python rok_gem_notifier.py
 Options: --marches 5 --lead 30 --region L T W H
          --test-image shot.png   (OCR test, no window)
 """
@@ -120,7 +120,7 @@ import pytesseract
 
 APP_VERSION = "1.0.6"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
-UPDATE_ASSET = "ROK-Gem-Helper.exe"       # release file name (+ ".sha256" checksum file)
+UPDATE_ASSET = "ROK-Gem-Notifier.exe"     # release file name (+ ".sha256" checksum file)
 HOTKEY_ACTIONS = (("scan", "Scan"), ("move", "Move"), ("clear", "Clear"))
 DEFAULT_KEYS = {"scan": "f8", "move": "f9", "clear": "f10"}
 MODIFIERS = {"ctrl", "shift", "alt", "windows", "left ctrl", "right ctrl", "left shift",
@@ -133,6 +133,10 @@ DONORS_FILE = "donors.json"               # last list downloaded, for offline us
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.7", "2026-11-05", [
+        "New name: ROK Gem Notifier, with a new icon",
+        "App name shown in red at the top",
+    ]),
     ("1.0.6", "2026-11-05", [
         "Overlay: red slashed circle when a gather is done (NOW)",
         "Top Donators: thank-you note on separate lines",
@@ -351,6 +355,7 @@ ORANGE, GOLD = "#f0a03c", "#e9c24f"
 FLASH, FLASH_UPD = "#3d1f25", "#38311b"
 SEL_OFF = "#4b4f57"
 PINK = "#ff5c8a"
+TITLE_RED = "#ff5a5a"      # the app name in the header
 
 # Segoe Fluent Icons / Segoe MDL2 Assets glyphs (built into Windows 10/11)
 IC = {"scan": "", "settings": "", "info": "", "sound": "",
@@ -846,7 +851,7 @@ def notify(msg, sound=False):
         beep()
     try:
         from plyer import notification
-        notification.notify(title="ROK Gem Helper", message=msg, timeout=8)
+        notification.notify(title="ROK Gem Notifier", message=msg, timeout=8)
         return
     except Exception:
         pass
@@ -857,7 +862,7 @@ def notify(msg, sound=False):
               "Add-Type -AssemblyName System.Drawing;"
               "$n = New-Object System.Windows.Forms.NotifyIcon;"
               "$n.Icon = [System.Drawing.SystemIcons]::Information;"
-              "$n.BalloonTipTitle = 'ROK Gem Helper';"
+              "$n.BalloonTipTitle = 'ROK Gem Notifier';"
               f"$n.BalloonTipText = '{safe}';"
               "$n.Visible = $true; $n.ShowBalloonTip(8000);"
               "Start-Sleep -Seconds 9; $n.Dispose()")
@@ -1051,7 +1056,7 @@ def version_tuple(v):
 
 def http_get(url, timeout=15):
     import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": "ROK-Gem-Helper",
+    req = urllib.request.Request(url, headers={"User-Agent": "ROK-Gem-Notifier",
                                                "Accept": "application/vnd.github+json"})
     return urllib.request.urlopen(req, timeout=timeout)
 
@@ -1633,7 +1638,7 @@ class App:
         self.setup_locked = False
         init_fonts()
 
-        root.title("ROK Gem Helper")
+        root.title("ROK Gem Notifier")
         try:
             from PIL import ImageTk
             self._icon = ImageTk.PhotoImage(make_icon_image(64))
@@ -1744,7 +1749,7 @@ class App:
         top.pack(fill="x", padx=18, pady=(20, 14))
         self._logo_sm = self.logo(30)
         tk.Label(top, image=self._logo_sm, bg=SIDEBAR).pack(side="left")
-        self.label(top, "ROK Gem Helper", WHITE, 12, "semi").pack(side="left", padx=(10, 0))
+        self.label(top, "ROK Gem Notifier", WHITE, 12, "semi").pack(side="left", padx=(10, 0))
 
         st = tk.Frame(sd, bg=SIDEBAR)
         st.pack(fill="x", padx=18, pady=(0, 16))
@@ -1900,7 +1905,7 @@ class App:
         """Zip error.log, settings, timers and the last failed scan onto the Desktop."""
         import subprocess
         import zipfile
-        name = f"ROK Gem Helper bug report {time.strftime('%Y-%m-%d %H%M')}.zip"
+        name = f"ROK Gem Notifier bug report {time.strftime('%Y-%m-%d %H%M')}.zip"
         folder = desktop_dir() or os.getcwd()
         path = os.path.join(folder, name)
         files = [f for f in (ERROR_LOG, "scan_debug.png", "scan_debug.txt", SETTINGS_FILE, TIMES_FILE,
@@ -1927,7 +1932,7 @@ class App:
 
     def system_info(self):
         import platform
-        lines = [f"ROK Gem Helper v{APP_VERSION}", f"Made: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        lines = [f"ROK Gem Notifier v{APP_VERSION}", f"Made: {time.strftime('%Y-%m-%d %H:%M:%S')}",
                  f"Windows: {platform.platform()}", f"Running as exe: {bool(getattr(sys, 'frozen', False))}",
                  f"Screen (app): {self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}"]
         try:
@@ -2009,7 +2014,7 @@ class App:
         tk.Label(h, image=self._logo_hd, bg=BG).pack(side="left")
         t = tk.Frame(h, bg=BG)
         t.pack(side="left", padx=(14, 0))
-        self.label(t, "ROK Gem Helper", WHITE, 19, "semi").pack(anchor="w")
+        self.label(t, "ROK Gem Notifier", TITLE_RED, 19, "semi").pack(anchor="w")
         self.label(t, "Gem march timers for Rise of Kingdoms", MUTED, 9).pack(anchor="w")
 
         self.scan_btn = Pill(h, "Scan", glyph("scan"), self.start_scan, fill="#f3f4f6",
@@ -2963,8 +2968,8 @@ class App:
                              checked=lambda item: self.overlay.visible()),
             pystray.MenuItem("Exit", lambda icon, item: q.put(("tray_exit",))))
         try:
-            self.tray = pystray.Icon("ROKGemHelper", make_icon_image(64),
-                                     "ROK Gem Helper", menu)
+            self.tray = pystray.Icon("ROKGemNotifier", make_icon_image(64),
+                                     "ROK Gem Notifier", menu)
             self.tray.run_detached()
         except Exception as e:
             log_error("tray", e)

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="source/assets/app_icon.png" width="96" alt="ROK Gem Helper icon">
+  <img src="source/assets/app_icon.png" width="96" alt="ROK Gem Notifier icon">
 </p>
 
-<h1 align="center">ROK Gem Helper</h1>
+<h1 align="center">ROK Gem Notifier</h1>
 
 <p align="center">Gem march timers for <b>Rise of Kingdoms</b> on PC</p>
 
@@ -10,12 +10,12 @@
   <a href="https://github.com/Tim1501/rok-gem-helper/releases/latest"><b>Download the latest version</b></a>
 </p>
 
-![ROK Gem Helper](source/assets/screenshot.png)
+![ROK Gem Notifier](source/assets/screenshot.png)
 
 ## What it does
 
 When you farm gems by sending a march from one mine straight to the next, the
-game never tells you when a gather is done. ROK Gem Helper reads the Troops list
+game never tells you when a gather is done. ROK Gem Notifier reads the Troops list
 on your screen, keeps a timer for every march, and warns you shortly before each
 gather ends, so you can send the march on right away.
 
@@ -43,9 +43,9 @@ gather ends, so you can send the march on right away.
 1. Install **Tesseract OCR**, which reads the text on screen:
    [download it here](https://github.com/UB-Mannheim/tesseract/wiki) and keep the
    default install folder.
-2. Download **ROK-Gem-Helper.exe** from the
+2. Download **ROK-Gem-Notifier.exe** from the
    [latest release](https://github.com/Tim1501/rok-gem-helper/releases/latest)
-   and put it in a folder of its own (for example `Documents\ROK Gem Helper`).
+   and put it in a folder of its own (for example `Documents\ROK Gem Notifier`).
 3. Double-click it. Windows asks for administrator rights; that is needed for the
    F8 / F9 / F10 hotkeys to work while the game window is active.
 
@@ -92,7 +92,7 @@ and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
 
 1. In the app, click **Generate Bug Report** (bottom of the sidebar).
 2. A zip file appears on your Desktop, for example
-   `ROK Gem Helper bug report 2026-11-05 1530.zip`. It contains the app's error log,
+   `ROK Gem Notifier bug report 2026-11-05 1530.zip`. It contains the app's error log,
    your settings and timers, basic system info (Windows version, screen size), and
    the screenshot of your last failed scan, if there was one. Have a look at that
    screenshot before sending if you are worried about chat or names in it.
@@ -103,18 +103,18 @@ and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
 
 | Path | What it is |
 | --- | --- |
-| `source/rok_gem_helper.py` | The whole app |
+| `source/rok_gem_notifier.py` | The whole app |
 | `source/assets/` | Icon, logo and screenshot |
-| `source/ROKGemHelper.spec` | Build settings for the exe (PyInstaller) |
+| `source/ROKGemNotifier.spec` | Build settings for the exe (PyInstaller) |
 | `source/release.py` | Builds and publishes a new version |
 | `donors.json` | The Top Donators list the app shows (edit it to add a donator) |
 
 Run from source: `pip install mss pytesseract pillow opencv-python keyboard plyer pystray`,
-then `python source/rok_gem_helper.py`.
+then `python source/rok_gem_notifier.py`.
 
 ## A note from the developer
 
-Hey, thanks for trying ROK Gem Helper!
+Hey, thanks for trying ROK Gem Notifier!
 
 I make this app as a hobby, in my free time after my day job. That means bug fixes
 and new features can sometimes take a while - thank you for your patience.

@@ -2029,8 +2029,11 @@ class App:
         Pill(head, "Donate", glyph("heart"), self.donate, fill="#3a1f2c", hover="#4a2638",
              fg=WHITE, icon_fg=PINK, h=34, size=9, padx=16,
              tip="Support the app on PayPal").pack(side="right")
-        self.label(top.body, "Thank you to everyone who keeps ROK Gem Helper going! Donate any "
-                             f"amount and tell @{DISCORD_NAME} on Discord the name to show here.",
+        self.label(top.body, "Tysm for being absolute beasts, for both using and donating to my "
+                             "tiny app. Even you using it is awesome :p If you have any messages, "
+                             "make sure to write them in a note when donating on PayPal.\n"
+                             "It might take a while for me to update the list since I do it "
+                             "manually, but thanks again :p",
                    TEXT, 9, wraplength=760, justify="left", anchor="w").pack(fill="x", pady=(12, 0))
         self.board_note = self.label(top.body, "", MUTED, 8, anchor="w")
         self.board_note.pack(fill="x", pady=(4, 0))

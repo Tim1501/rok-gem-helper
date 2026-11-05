@@ -1431,9 +1431,25 @@ class Scroll(tk.Frame):
         self.bar.bind("<ButtonPress-1>", self._drag)
         self.bar.bind("<B1-Motion>", self._drag)
 
+    RADIUS = 14     # same as the cards
+
     def _resize(self, e):
         self.cv.itemconfigure(self._win, width=e.width)
         self._region()
+        self._round(e.width, e.height)
+
+    def _round(self, w, h):
+        """Clip the visible area to a rounded rectangle (a Windows window region), so
+        cards scrolled half out of view are cut with round corners, not hard edges."""
+        if os.name != "nt" or w < 2 or h < 2:
+            return
+        try:
+            import ctypes
+            d = 2 * self.RADIUS
+            rgn = ctypes.windll.gdi32.CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d)
+            ctypes.windll.user32.SetWindowRgn(self.cv.winfo_id(), rgn, True)   # Windows owns rgn now
+        except Exception:
+            pass
 
     def _region(self):
         self.cv.configure(scrollregion=(0, 0, self.cv.winfo_width(), self.body.winfo_reqheight()))

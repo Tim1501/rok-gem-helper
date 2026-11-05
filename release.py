@@ -62,13 +62,20 @@ def main():
     with open(APP, "w", encoding="utf-8") as f:
         f.write(src)
 
+    # build outside dist/, so a copy of the app that is open doesn't block the build
     work = tempfile.mkdtemp(prefix="rgh_build_")
-    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--workpath", work, "ROKGemHelper.spec")
-    shutil.rmtree(work, ignore_errors=True)
+    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--workpath", work,
+        "--distpath", os.path.join(work, "dist"), "ROKGemHelper.spec")
+    built = os.path.join(work, "dist", "ROK Gem Helper.exe")
 
     out = tempfile.mkdtemp(prefix="rgh_release_")
     exe = os.path.join(out, ASSET)
-    shutil.copyfile(os.path.join(HERE, "dist", "ROK Gem Helper.exe"), exe)
+    shutil.copyfile(built, exe)
+    try:
+        shutil.copyfile(built, os.path.join(HERE, "dist", "ROK Gem Helper.exe"))
+    except OSError:
+        print("dist/ROK Gem Helper.exe is open, so it was not replaced - it will offer the update itself")
+    shutil.rmtree(work, ignore_errors=True)
     digest = hashlib.sha256(open(exe, "rb").read()).hexdigest()
     with open(exe + ".sha256", "w") as f:
         f.write(f"{digest}  {ASSET}\n")

@@ -1,5 +1,4 @@
 # the app and what it saves (gems, times, settings, logs) stay on your PC
-ROK Gem Helper.exe
 *.exe
 *.exe.new
 *.exe.old

@@ -118,7 +118,7 @@ import cv2
 import numpy as np
 import pytesseract
 
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Helper.exe"       # release file name (+ ".sha256" checksum file)
 HOTKEY_ACTIONS = (("scan", "Scan"), ("move", "Move"), ("clear", "Clear"))
@@ -133,6 +133,16 @@ DONORS_FILE = "donors.json"               # last list downloaded, for offline us
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.4", "2026-11-05", [
+        "Hotkeys work again (v1.0.3 wrongly asked for administrator)",
+        "Fixed gems being counted for gathers that never finished",
+        "Mine level is no longer lost once a march starts gathering",
+        "Smart Gather On shows Smart Gather Times (learned, read-only)",
+        "New Returning status; coordinates are no longer read",
+        "Overlay: rounded corners and status dots",
+        "Top Donators board in the menu",
+        "Generate Bug Report button and error log",
+    ]),
     ("1.0.3", "2026-11-05", [
         "Change the Scan, Move and Clear hotkeys in Settings > Hotkeys",
         "What's new only shows lines that fit completely",

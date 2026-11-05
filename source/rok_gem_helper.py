@@ -17,8 +17,8 @@ Per scan:
    "Gathering 00:xx:xx"          -> gather countdown + "Gathering Level 3 Gem Mine"
                                     (the mine it was last seen marching to)
    "Returning 00:xx:xx"          -> going home: countdown, then the row goes idle
-Each overlay row starts with a round badge: orange walker = marching,
-green pickaxe = gathering, blue arrow = returning, gold = scan now, red = resend.
+Overlay rows start with a dot: filled green = gathering, hollow yellow =
+marching, red cross = returning.
 Coordinates on screen are not read.
 If only some rows are visible: scan, scroll, scan again.
 If a new commander shows up and every slot is taken (e.g. a fighting march was
@@ -897,10 +897,10 @@ class Overlay:
         self.rows = []
         for _ in range(MAX_MARCHES):
             row = tk.Frame(self.frame, bg=BG)
-            ic = tk.Label(row, bg=BG, bd=0, image=a.status_img("idle", 18))
+            ic = tk.Label(row, bg=BG, bd=0, image=a.status_img("idle", 12))
             n = tk.Label(row, bg=BG, fg=TEXT, font=a.mono(9), width=9, anchor="w")
             t = tk.Label(row, bg=BG, fg=WHITE, font=a.mono(9), width=8, anchor="e")
-            ic.pack(side="left", padx=(0, 6), pady=1)
+            ic.pack(side="left", padx=(2, 8), pady=1)
             n.pack(side="left")
             t.pack(side="left")
             self.rows.append((row, ic, n, t))
@@ -995,7 +995,7 @@ class Overlay:
         if not self.vis:
             row, ic, n, t = self.rows[0]
             row.configure(bg=BG)
-            ic.configure(bg=BG, image=self.app.status_img("empty", 18))
+            ic.configure(bg=BG, image=self.app.status_img("empty", 12))
             n.configure(bg=BG, fg=TEXT, text="-- scan --")
             t.configure(bg=BG, text="")
             return
@@ -1011,7 +1011,7 @@ class Overlay:
             elif s.status == "update" and blink:
                 bg = FLASH_UPD
             row.configure(bg=bg)
-            ic.configure(bg=bg, image=self.app.status_img(s.status, 18))
+            ic.configure(bg=bg, image=self.app.status_img(s.status, 12))
             n.configure(bg=bg, fg=cols[s.status], text=s.short[:9])
             if s.status in ("walking", "returning") and s.walk_due:
                 t.configure(bg=bg, text=short(s.walk_due - now), fg=cols[s.status])
@@ -1252,45 +1252,24 @@ class Tip:
         t.geometry(f"+{self.w.winfo_rootx()}+{self.w.winfo_rooty() + self.w.winfo_height() + 6}")
 
 
-def draw_pickaxe(d, S, fill):
-    """Pickaxe symbol (Windows' icon font has none): handle + tapered curved head."""
-    import math
-    cx, cy, r, th, w = 0.34 * S, 0.66 * S, 0.38 * S, 0.16 * S, int(0.08 * S)
-    tip = (cx + 0.40 * S * math.cos(math.radians(-45)), cy + 0.40 * S * math.sin(math.radians(-45)))
-    d.line([(cx, cy), tip], fill=fill, width=w)
-    d.ellipse([cx - w / 2, cy - w / 2, cx + w / 2, cy + w / 2], fill=fill)
-    outer, inner = [], []
-    for i in range(41):                 # head: an arc around the handle end, pointed tips
-        f = i / 40
-        a = math.radians(-45 - 75 + f * 150)
-        half = th * (0.12 + 0.88 * math.sin(math.pi * f) ** 0.7) / 2
-        outer.append((cx + (r + half) * math.cos(a), cy + (r + half) * math.sin(a)))
-        inner.append((cx + (r - half) * math.cos(a), cy + (r - half) * math.sin(a)))
-    d.polygon(outer + inner[::-1], fill=fill)
-
-
-def make_status_icon(look, size):
-    """Round status badge: a circle in the status colour with a white symbol
-    (grey circle for idle / empty / skipped). Returns a PIL image."""
-    from PIL import Image, ImageDraw, ImageFont
-    name, col, _ = LOOK[look]
+def make_dot(look, size):
+    """Overlay status mark: filled green dot = gathering, hollow yellow ring =
+    marching, red cross = returning; nothing for the other states."""
+    from PIL import Image, ImageDraw
     k = 8
     S = size * k
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    muted = col == MUTED
-    d.ellipse([0, 0, S - 1, S - 1], fill=FIELD_HI if muted else col)
-    fg = TEXT if muted else "#ffffff"
-    if name == "pickaxe":
-        draw_pickaxe(d, S, fg)
-    else:
-        for path in (r"C:\Windows\Fonts\SegoeIcons.ttf", r"C:\Windows\Fonts\segmdl2.ttf"):
-            try:
-                f = ImageFont.truetype(path, int(S * 0.52))
-                d.text((S / 2, S / 2), IC[name], font=f, fill=fg, anchor="mm")
-                break
-            except Exception:
-                continue
+    m, w = S * 0.14, int(S * 0.16)
+    if look in ("gathering", "ready"):
+        d.ellipse([m, m, S - m, S - m], fill=GREEN)
+    elif look == "walking":
+        d.ellipse([m, m, S - m, S - m], outline=GOLD, width=w)
+    elif look == "returning":
+        for a, b in (((m, m), (S - m, S - m)), ((m, S - m), (S - m, m))):
+            d.line([a, b], fill=RED, width=w)
+            for x, y in (a, b):
+                d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=RED)
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -1608,7 +1587,7 @@ class Field(tk.Canvas):
 # march row look per status: (icon, colour, chip text)
 LOOK = {"idle": ("clock", MUTED, "Idle"), "walking": ("walk", ORANGE, "Marching"),
         "returning": ("return", ACCENT, "Returning"),
-        "update": ("sync", GOLD, "Scan now"), "gathering": ("pickaxe", GREEN, "Gathering"),
+        "update": ("sync", GOLD, "Scan now"), "gathering": ("timer", GREEN, "Gathering"),
         "ready": ("warn", RED, "Resend!"), "empty": ("unknown", MUTED, "Empty"),
         "skip": ("minus", MUTED, "Skipped")}
 
@@ -1679,7 +1658,7 @@ class App:
         key = (look, size)
         if key not in self._sicons:
             from PIL import ImageTk
-            self._sicons[key] = ImageTk.PhotoImage(make_status_icon(look, size))
+            self._sicons[key] = ImageTk.PhotoImage(make_dot(look, size))
         return self._sicons[key]
 
     def mono(self, size=9):
@@ -3086,7 +3065,7 @@ class App:
         else:
             look, name, sub = s.status, s.full, sub_parts(s)
         ic, col, chip = LOOK[look]
-        w["icon"].configure(text=glyph("timer" if ic == "pickaxe" else ic), fg=col)
+        w["icon"].configure(text=glyph(ic), fg=col)
         w["name"].configure(text=name, fg=WHITE if s.gatherer else MUTED)
         w["chip"].set(text=chip, fg=col)
         self.set_sub(w, sub)

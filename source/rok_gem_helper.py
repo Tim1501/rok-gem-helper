@@ -18,7 +18,7 @@ Per scan:
                                     (the mine it was last seen marching to)
    "Returning 00:xx:xx"          -> going home: countdown, then the row goes idle
 Overlay rows start with a dot: filled green = gathering, hollow yellow =
-marching, red cross = returning.
+marching, red cross = returning, or a gather that is done (NOW).
 Coordinates on screen are not read.
 If only some rows are visible: scan, scroll, scan again.
 If a new commander shows up and every slot is taken (e.g. a fighting march was
@@ -1021,7 +1021,8 @@ class Overlay:
             elif s.status == "update" and blink:
                 bg = FLASH_UPD
             row.configure(bg=bg)
-            ic.configure(bg=bg, image=self.app.status_img(s.status, 12))
+            done = s.status == "ready" and s.gather_due and s.gather_due <= now   # shows NOW
+            ic.configure(bg=bg, image=self.app.status_img("done" if done else s.status, 12))
             n.configure(bg=bg, fg=cols[s.status], text=s.short[:9])
             if s.status in ("walking", "returning") and s.walk_due:
                 t.configure(bg=bg, text=short(s.walk_due - now), fg=cols[s.status])
@@ -1125,7 +1126,8 @@ def fmt_money(cur, amount):
 
 def fetch_donors():
     """Download the list from GitHub (saved for offline use); fall back to the saved one.
-    Returns (data or None, online)."""
+    Returns (data or None, online, why it failed: "missing" / "offline" / None).
+    A failed download is written to error.log with the exact reason."""
     try:
         with http_get(DONORS_URL, 10) as r:
             data = json.load(r)
@@ -1134,13 +1136,15 @@ def fetch_donors():
                 json.dump(data, f, indent=2)
         except OSError:
             pass
-        return data, True
-    except Exception:
+        return data, True, None
+    except Exception as e:
+        log_error("donators list", e)
+        why = "missing" if getattr(e, "code", None) == 404 else "offline"
         try:
             with open(DONORS_FILE, encoding="utf-8") as f:
-                return json.load(f), False
+                return json.load(f), False, why
         except Exception:
-            return None, False
+            return None, False, why
 
 
 def key_label(key):
@@ -1264,7 +1268,7 @@ class Tip:
 
 def make_dot(look, size):
     """Overlay status mark: filled green dot = gathering, hollow yellow ring =
-    marching, red cross = returning; nothing for the other states."""
+    marching, red cross = returning or a gather that is done ("NOW"); nothing else."""
     from PIL import Image, ImageDraw
     k = 8
     S = size * k
@@ -1275,7 +1279,7 @@ def make_dot(look, size):
         d.ellipse([m, m, S - m, S - m], fill=GREEN)
     elif look == "walking":
         d.ellipse([m, m, S - m, S - m], outline=GOLD, width=w)
-    elif look == "returning":
+    elif look in ("returning", "done"):
         for a, b in (((m, m), (S - m, S - m)), ((m, S - m), (S - m, m))):
             d.line([a, b], fill=RED, width=w)
             for x, y in (a, b):
@@ -2064,11 +2068,14 @@ class App:
             self._medals[rank] = ImageTk.PhotoImage(im.resize((34, 34), Image.LANCZOS))
         return self._medals[rank]
 
-    def show_donors(self, data, online):
+    def show_donors(self, data, online, why=None):
         for w in self.board_list.winfo_children():
             w.destroy()
         if data is None:
-            self.board_note.configure(text="Couldn't load the list - check your internet and try again.")
+            self.board_note.configure(
+                text="The list isn't online yet - try again later." if why == "missing" else
+                "Couldn't reach GitHub - check your internet, then open Top Donators again. "
+                "(Details in error.log)")
             return
         cur, updated, donors = parse_donors(data)
         note = f"Updated {updated}" if updated else ""
@@ -2812,7 +2819,7 @@ class App:
             elif k == "hotkey":
                 self.set_key(item[1])
             elif k == "donors":
-                self.show_donors(item[1], item[2])
+                self.show_donors(*item[1:])
             elif k == "update":
                 self.show_update(item[1])
             elif k == "restart":

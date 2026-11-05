@@ -1,0 +1,13 @@
+# build output
+build/
+dist/
+__pycache__/
+*.exe
+*.exe.new
+*.exe.old
+
+# personal data written by the app (gems, times, settings, logs, debug scans)
+march_*.json
+march_*.log
+overlay_pos.json
+scan_debug.*

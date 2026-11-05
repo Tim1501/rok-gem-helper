@@ -104,6 +104,8 @@ import pytesseract
 APP_VERSION = "1.0.1"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Helper.exe"       # release file name (+ ".sha256" checksum file)
+DONATE_URL = "https://paypal.me/DeepTak646"
+DISCORD_NAME = "ChanaMasala"
 
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
@@ -299,6 +301,7 @@ TEAL, RED, GREEN = "#3cc4b0", "#e5484d", "#3fcf74"
 ORANGE, GOLD = "#f0a03c", "#e9c24f"
 FLASH, FLASH_UPD = "#3d1f25", "#38311b"
 SEL_OFF = "#4b4f57"
+PINK = "#ff5c8a"
 
 # Segoe Fluent Icons / Segoe MDL2 Assets glyphs (built into Windows 10/11)
 IC = {"scan": "", "settings": "", "info": "", "sound": "",
@@ -307,7 +310,7 @@ IC = {"scan": "", "settings": "", "info": "", "sound": "",
       "lock": "", "unlock": "", "down": "", "up": "",
       "walk": "", "reset": "", "smart": "", "log": "",
       "warn": "", "sync": "", "people": "", "minus": "",
-      "unknown": ""}
+      "unknown": "", "heart": ""}
 
 
 # ================================================================ core
@@ -1555,8 +1558,25 @@ class App:
         for k, what in (("F8", "Scan"), ("F9", "Move"), ("F10", "Clear")):
             Pill(keys, f"{k} {what}", h=24, size=8, padx=8, fill=FIELD, fg=TEXT
                  ).pack(side="left", padx=(0, 5))
-        self.label(foot, "made by @ChanaMasala on discord", "#8ea1f0", 8).pack(anchor="w")
+        Pill(foot, "Donate", glyph("heart"), self.donate, fill="#3a1f2c", hover="#4a2638",
+             fg=WHITE, icon_fg=PINK, h=34, size=9, width=204, radius=9,
+             tip="Like the app? Support it on PayPal").pack(anchor="w", pady=(0, 10))
+        self.label(foot, "Found a bug? Contact", MUTED, 8).pack(anchor="w")
+        bug = self.label(foot, f"@{DISCORD_NAME} on Discord", "#8ea1f0", 9, "semi", cursor="hand2")
+        bug.pack(anchor="w")
+        bug.bind("<Button-1>", lambda e: self.copy_discord())
+        Tip(bug, "Click to copy the Discord name")
         self.build_changelog(sd)       # after the footer, so it only takes the space left
+
+    def donate(self):
+        import webbrowser
+        webbrowser.open(DONATE_URL)
+        self.set_result("THANK YOU: the PayPal page opened in your browser")
+
+    def copy_discord(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(DISCORD_NAME)
+        self.set_result(f"COPIED: {DISCORD_NAME} - paste it in Discord to report a bug")
 
     def build_changelog(self, sd):
         hd = tk.Frame(sd, bg=SIDEBAR)

@@ -133,6 +133,10 @@ DONORS_FILE = "donors.json"               # last list downloaded, for offline us
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.6", "2026-11-05", [
+        "Overlay: red slashed circle when a gather is done (NOW)",
+        "Top Donators: thank-you note on separate lines",
+    ]),
     ("1.0.5", "2026-11-05", [
         "Top Donators: crowns for the top 3 and a new thank-you note",
         "Overlay: red cross when a gather is done (NOW)",

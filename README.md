@@ -67,11 +67,14 @@ Optional:
   **Smart Gather** fill them in. A march's timer then starts by itself when it
   arrives at the mine.
 
-| Key | Action |
+| Default key | Action |
 | --- | --- |
 | F8  | Scan the Troops list |
 | F9  | Unlock / lock the overlay to move it |
 | F10 | Clear all timers |
+
+Prefer other keys? **Settings > Hotkeys**: click Scan, Move or Clear and press the key
+(or combination, like Ctrl+Shift+S) you want. The reset button brings back F8 / F9 / F10.
 
 Gems are counted as Gem Mine level x 10 per finished gather (level 1 = 10 ...
 level 4 = 40). Commander talents and buffs are not included.

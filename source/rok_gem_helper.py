@@ -72,6 +72,7 @@ ROK-Gem-Helper.exe and ROK-Gem-Helper.exe.sha256 attached:
          add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
 Hotkeys:  F8 = scan    F9 = unlock/lock overlay for dragging    F10 = clear timers
+          (change them in Settings > Hotkeys; saved in march_settings.json)
 
 Setup (Windows):
   1. Install Tesseract OCR: https://github.com/UB-Mannheim/tesseract/wiki
@@ -104,12 +105,20 @@ import pytesseract
 APP_VERSION = "1.0.2"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Helper.exe"       # release file name (+ ".sha256" checksum file)
+HOTKEY_ACTIONS = (("scan", "Scan"), ("move", "Move"), ("clear", "Clear"))
+DEFAULT_KEYS = {"scan": "f8", "move": "f9", "clear": "f10"}
+MODIFIERS = {"ctrl", "shift", "alt", "windows", "left ctrl", "right ctrl", "left shift",
+             "right shift", "left alt", "right alt", "alt gr", "left windows", "right windows"}
 DONATE_URL = "https://paypal.me/DeepTak646"
 DISCORD_NAME = "ChanaMasala"
 
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.3", "2026-11-05", [
+        "Change the Scan, Move and Clear hotkeys in Settings > Hotkeys",
+        "What's new only shows lines that fit completely",
+    ]),
     ("1.0.2", "2026-11-05", [
         "Donate button in the sidebar - any support is appreciated",
         "Found a bug? Contact @ChanaMasala on Discord (click the name to copy it)",
@@ -314,7 +323,7 @@ IC = {"scan": "", "settings": "", "info": "", "sound": "",
       "lock": "", "unlock": "", "down": "", "up": "",
       "walk": "", "reset": "", "smart": "", "log": "",
       "warn": "", "sync": "", "people": "", "minus": "",
-      "unknown": "", "heart": ""}
+      "unknown": "", "heart": "", "keyboard": ""}
 
 
 # ================================================================ core
@@ -862,7 +871,7 @@ class Overlay:
         self.frame = tk.Frame(w, bg=BG, highlightthickness=1,
                               highlightbackground=LINE, padx=6, pady=4)
         self.frame.pack()
-        self.hint = tk.Label(self.frame, text="DRAG ME - F9 LOCKS", fg=ORANGE,
+        self.hint = tk.Label(self.frame, text=f"DRAG ME - {key_label(a.keys['move'])} LOCKS", fg=ORANGE,
                              bg=BG, font=a.mono(7))
         self.rows = []
         for _ in range(MAX_MARCHES):
@@ -1014,6 +1023,12 @@ def latest_release():
         return None
     return {"version": tag.lstrip("vV"), "notes": (d.get("body") or "").strip(),
             "exe": urls[UPDATE_ASSET], "sha": urls[UPDATE_ASSET + ".sha256"]}
+
+
+def key_label(key):
+    """'ctrl+shift+f8' -> 'Ctrl+Shift+F8' (how a hotkey is shown)."""
+    return "+".join(p.upper() if len(p) == 1 or re.fullmatch(r"f\d+", p) else p.title()
+                    for p in (key or "").split("+"))
 
 
 def asset(name):
@@ -1447,6 +1462,11 @@ class App:
         self.sound_on = bool(cfg.get("sound", False))
         self.smart_on = bool(cfg.get("smart", True))
         self.collapsed = set(cfg.get("collapsed", [])) if isinstance(cfg.get("collapsed"), list) else set()
+        saved = cfg.get("hotkeys") if isinstance(cfg.get("hotkeys"), dict) else {}
+        self.keys = {a: str(saved.get(a) or d).lower() for a, d in DEFAULT_KEYS.items()}
+        self.capturing = None
+        if not demo:
+            self.hotkeys_ok = self.register_hotkeys()
         if region is None and isinstance(cfg.get("region"), list) and len(cfg["region"]) == 4:
             self.region = [int(v) for v in cfg["region"]]
         self.overlay = Overlay(self)
@@ -1530,7 +1550,8 @@ class App:
         ok = self.hotkeys_ok
         Pill(st, "Live" if ok else "Hotkeys off", h=24, size=8, padx=10, fill=FIELD,
              fg=GREEN if ok else RED,
-             tip="F8 / F9 / F10 work everywhere, even in the game" if ok else
+             tip=(lambda: " / ".join(key_label(k) for k in self.keys.values())
+                  + " work everywhere, even in the game") if ok else
              "Hotkeys could not be registered - run the app as administrator").pack(side="left")
         Pill(st, time.strftime("%d %b %Y"), h=24, size=8, padx=10, fill=FIELD, fg=TEXT
              ).pack(side="left", padx=(6, 0))
@@ -1559,9 +1580,11 @@ class App:
                  "Commander talents and buffs are not counted. Today resets at midnight.")
         keys = tk.Frame(foot, bg=SIDEBAR)
         keys.pack(fill="x", pady=(0, 10))
-        for k, what in (("F8", "Scan"), ("F9", "Move"), ("F10", "Clear")):
-            Pill(keys, f"{k} {what}", h=24, size=8, padx=8, fill=FIELD, fg=TEXT
-                 ).pack(side="left", padx=(0, 5))
+        self.key_chips = {}
+        for action, what in HOTKEY_ACTIONS:
+            self.key_chips[action] = Pill(keys, f"{key_label(self.keys[action])} {what}", h=24,
+                                          size=8, padx=8, fill=FIELD, fg=TEXT)
+            self.key_chips[action].pack(side="left", padx=(0, 5))
         Pill(foot, "Donate", glyph("heart"), self.donate, fill="#3a1f2c", hover="#4a2638",
              fg=WHITE, icon_fg=PINK, h=34, size=9, width=204, radius=9,
              tip="Like the app? Support it on PayPal").pack(anchor="w", pady=(0, 10))
@@ -1571,6 +1594,84 @@ class App:
         bug.bind("<Button-1>", lambda e: self.copy_discord())
         Tip(bug, "Click to copy the Discord name")
         self.build_changelog(sd)       # after the footer, so it only takes the space left
+
+    # ---------- hotkeys
+    def register_hotkeys(self):
+        """(Re)bind the global hotkeys. A key that can't be bound goes back to its
+        default; False when the keyboard hook isn't available at all."""
+        try:
+            import keyboard
+            keyboard.unhook_all_hotkeys()
+        except Exception:
+            return False
+        for action in self.keys:
+            for key in (self.keys[action], DEFAULT_KEYS[action]):
+                try:
+                    keyboard.add_hotkey(key, lambda a=action: self.q.put((a,)))
+                    self.keys[action] = key
+                    break
+                except Exception:
+                    continue
+        return True
+
+    def capture_key(self, action):
+        if not self.hotkeys_ok:
+            self.set_result("!HOTKEYS OFF: run the app as administrator to use and change hotkeys")
+            return
+        waiting = self.capturing is not None
+        self.capturing = action
+        self.paint_keys()
+        self.set_result(f"HOTKEY: press the new key for {dict(HOTKEY_ACTIONS)[action]} (Esc cancels)")
+        if not waiting:
+            threading.Thread(target=self._read_key, daemon=True).start()
+
+    def _read_key(self):
+        try:
+            import keyboard
+            keyboard.unhook_all_hotkeys()      # the old keys must not fire while choosing
+            key = keyboard.read_hotkey(suppress=False)
+        except Exception:
+            key = None
+        self.q.put(("hotkey", key))
+
+    def set_key(self, key):
+        action, self.capturing = self.capturing, None
+        names = dict(HOTKEY_ACTIONS)
+        key = (key or "").lower()
+        other = next((a for a, k in self.keys.items() if k == key and a != action), None)
+        if not action or not key or key == "esc":
+            msg = "HOTKEY: unchanged"
+        elif all(part in MODIFIERS for part in key.split("+")):
+            msg = f"!HOTKEY: {key_label(key)} alone can't be a hotkey - add another key"
+        elif other:
+            msg = f"!HOTKEY: {key_label(key)} is already used for {names[other]}"
+        else:
+            self.keys[action] = key
+            msg = f"HOTKEY: {names[action]} is now {key_label(key)}"
+        self.register_hotkeys()
+        if action and self.keys[action] != key and msg.startswith("HOTKEY: " + names[action]):
+            msg = f"!HOTKEY: {key_label(key)} can't be used - {names[action]} stays " \
+                  f"{key_label(self.keys[action])}"
+        self.paint_keys()
+        self.save_settings()
+        self.set_result(msg)
+
+    def reset_keys(self):
+        self.keys = dict(DEFAULT_KEYS)
+        if self.hotkeys_ok and self.capturing is None:
+            self.register_hotkeys()
+        self.paint_keys()
+        self.save_settings()
+        self.set_result("HOTKEY: back to F8 Scan, F9 Move, F10 Clear")
+
+    def paint_keys(self):
+        for action, what in HOTKEY_ACTIONS:
+            busy = action == self.capturing
+            self.key_btns[action].set(text="Press a key..." if busy else
+                                      f"{what}  {key_label(self.keys[action])}",
+                                      fill=ACCENT if busy else FIELD,
+                                      hover=ACCENT_HI if busy else FIELD_HI)
+            self.key_chips[action].set(text=f"{key_label(self.keys[action])} {what}")
 
     def donate(self):
         import webbrowser
@@ -1586,20 +1687,44 @@ class App:
         hd = tk.Frame(sd, bg=SIDEBAR)
         hd.pack(fill="x", padx=20, pady=(22, 8))
         self.label(hd, "WHAT'S NEW", MUTED, 8, "semi").pack(side="left")
-        box = tk.Frame(sd, bg=SIDEBAR)
+        box = self.cl_box = tk.Frame(sd, bg=SIDEBAR)
         box.pack(fill="both", expand=True, padx=(20, 14))
-        for ver, date, items in CHANGELOG[:3]:
+        box.pack_propagate(False)            # the list never pushes the footer away
+        self.cl_lines, self.cl_fit = [], None
+        for n, (ver, date, items) in enumerate(CHANGELOG):
             top = tk.Frame(box, bg=SIDEBAR)
-            top.pack(fill="x", pady=(0, 4))
             self.label(top, f"v{ver}", WHITE if ver == APP_VERSION else TEXT, 10, "semi").pack(side="left")
             self.label(top, date, MUTED, 8).pack(side="left", padx=(8, 0), pady=(2, 0))
+            self.cl_lines.append((top, (12 if n else 0, 4), True))
             for it in items:
                 row = tk.Frame(box, bg=SIDEBAR)
-                row.pack(fill="x", pady=1)
                 self.label(row, "•", ACCENT, 9).pack(side="left", anchor="n")
                 self.label(row, it, TEXT, 9, wraplength=172, justify="left", anchor="w"
                            ).pack(side="left", padx=(6, 0), fill="x")
-            tk.Frame(box, bg=SIDEBAR, height=10).pack()
+                self.cl_lines.append((row, (1, 1), False))
+        box.bind("<Configure>", lambda e: self.fit_changelog())
+
+    def fit_changelog(self):
+        """Show only lines that fit completely; the rest are hidden, not cut in half.
+        A version heading is only shown together with its first line."""
+        avail = self.cl_box.winfo_height()
+        if avail == self.cl_fit:
+            return
+        self.cl_fit = avail
+        for w, _, _ in self.cl_lines:
+            w.pack_forget()
+        used = 0
+        for i, (w, pady, head) in enumerate(self.cl_lines):
+            h = w.winfo_reqheight() + sum(pady)
+            if head and i + 1 < len(self.cl_lines):
+                nxt, npady, _ = self.cl_lines[i + 1]
+                h_need = h + nxt.winfo_reqheight() + sum(npady)
+            else:
+                h_need = h
+            if used + h_need > avail:
+                break
+            w.pack(fill="x", pady=pady)
+            used += h
 
     def build_header(self, m):
         h = tk.Frame(m, bg=BG)
@@ -1613,7 +1738,7 @@ class App:
 
         self.scan_btn = Pill(h, "Scan", glyph("scan"), self.start_scan, fill="#f3f4f6",
                              fg="#111317", hover="#ffffff", h=44, size=11, padx=24,
-                             tip="Read the Troops list on screen (F8)")
+                             tip=lambda: f"Read the Troops list on screen ({key_label(self.keys['scan'])})")
         self.scan_btn.pack(side="right")
         btn = dict(h=42, width=42, fill=FIELD, hover=FIELD_HI, size=11, fg=WHITE)
         self.tray_btn = Pill(h, "", glyph("tray"), self.minimize_to_tray,
@@ -1621,8 +1746,10 @@ class App:
         self.ov_btn = Pill(h, "", glyph("overlay"), self.toggle_overlay,
                            tip="Overlay on / off", **btn)
         self.move_btn = Pill(h, "", glyph("move"), self.toggle_move,
-                             tip="Unlock the overlay to drag it, click again to lock (F9)", **btn)
-        self.clear_btn = Pill(h, "", glyph("trash"), self.clear, tip="Clear all timers (F10)",
+                             tip=lambda: "Unlock the overlay to drag it, click again to lock "
+                                         f"({key_label(self.keys['move'])})", **btn)
+        self.clear_btn = Pill(h, "", glyph("trash"), self.clear,
+                              tip=lambda: f"Clear all timers ({key_label(self.keys['clear'])})",
                               **dict(btn, fill=RED, hover="#ef6a6e"))
         for b in (self.tray_btn, self.ov_btn, self.move_btn, self.clear_btn):
             b.pack(side="right", padx=(0, 10))
@@ -1654,7 +1781,8 @@ class App:
         self.result_txt.tag_configure("body", foreground=WHITE)
         self.result_txt.tag_configure("err", foreground=RED)
         self.result_txt.pack(fill="x", pady=(6, 0))
-        self.set_result("READY: open the Troops list in the game and press Scan (F8)")
+        self.set_result("READY: open the Troops list in the game and press Scan "
+                        f"({key_label(self.keys['scan'])})")
 
     def section(self, parent, key, ic, title, tip=None):
         box = Box(parent, CARD, radius=14, pad=(20, 16), outline=BORDER)
@@ -1823,6 +1951,19 @@ class App:
         self.sound_seg = Seg(c, [(False, "Off"), (True, "On")], self.sound_on, self.set_sound,
                              colors={False: SEL_OFF}, seg_w=50, h=32)
         self.sound_seg.pack(side="left")
+
+        c = item(2, 0, "keyboard", "Hotkeys",
+                 "Click a button, then press the key (or key combination) you want for it. "
+                 "Esc cancels. The keys work everywhere, even while the game is focused.")
+        self.key_btns = {}
+        for action, what in HOTKEY_ACTIONS:
+            b = Pill(c, "", "", lambda a=action: self.capture_key(a), h=32, size=9, padx=12,
+                     fill=FIELD, hover=FIELD_HI)
+            b.pack(side="left", padx=(0, 6))
+            self.key_btns[action] = b
+        Pill(c, "", glyph("reset"), self.reset_keys, h=32, width=32, size=9, fill=FIELD,
+             hover=FIELD_HI, tip="Back to F8 / F9 / F10").pack(side="left")
+        self.paint_keys()
 
     # ---------- gather times
     def gather_secs(self, i, level):
@@ -2255,7 +2396,8 @@ class App:
                 json.dump({"lead": self.lead.get(), "sound": self.sound_on, "smart": self.smart_on,
                            "region": list(self.region) if self.region else None,
                            "overlay": self.overlay.visible(),
-                           "collapsed": sorted(self.collapsed)}, f, indent=2)
+                           "collapsed": sorted(self.collapsed),
+                           "hotkeys": self.keys}, f, indent=2)
         except Exception:
             pass
 
@@ -2298,6 +2440,8 @@ class App:
             elif k == "save":
                 self.save_state()
                 self.save_slots()
+            elif k == "hotkey":
+                self.set_key(item[1])
             elif k == "update":
                 self.show_update(item[1])
             elif k == "restart":
@@ -2643,18 +2787,7 @@ def main():
 
     root = tk.Tk()
     app_box = {}
-    hotkeys_ok = a.demo
-    if not a.demo:
-        try:
-            import keyboard
-            keyboard.add_hotkey("f8", lambda: app_box["app"].q.put(("scan",)))
-            keyboard.add_hotkey("f9", lambda: app_box["app"].q.put(("move",)))
-            keyboard.add_hotkey("f10", lambda: app_box["app"].q.put(("clear",)))
-            hotkeys_ok = True
-        except Exception:
-            hotkeys_ok = False
-
-    app = App(root, a.marches, a.lead, a.region, hotkeys_ok, demo=a.demo)
+    app = App(root, a.marches, a.lead, a.region, hotkeys_ok=a.demo, demo=a.demo)
     app_box["app"] = app
     app.save_state()
 

@@ -43,8 +43,9 @@ means the timer came from a saved gather time. Sound On adds a short beep
 (Windows hides notifications while a full-screen game runs; the beep still plays).
 
 Gems: when a gather finishes, Gem Mine level x counts x*10 gems (L1=10 ... L4=40),
-once per gather. A march seen marching on before its timer ended is counted
-too, unless a scanned timer still had over a minute left (recalled). Total (kept
+once per gather. A march seen on a new march before its timer ended is counted
+only if under 3 minutes were left (or 70% of a saved-time estimate had passed);
+otherwise it was recalled. No timer, no gems. Total (kept
 forever) and Today (resets at local midnight) show in the sidebar and are saved in
 march_gems.json (+ march_gems.log).
 
@@ -59,9 +60,11 @@ the real in-game timer. Unlock a commander to edit and re-lock to save.
 Smart Gather (On by default): when a scan shows a march gathering and the
 tracker knows when it arrived (a scan saw it marching), time since arrival +
 time left = how long that commander takes for that Gem Mine level. The last 5
-are kept per commander and level in march_smart.json; their median fills EMPTY
-boxes in teal and updates as more come in. A time you typed is never replaced;
-locking a row turns its teal times into your own.
+are kept per commander and level in march_smart.json; their median is used.
+While Smart Gather is On the card is called "Smart Gather Times" and shows the
+learned times in teal (read-only); a level not learned yet shows and uses your own
+time in grey. Off: your own times come back, editable. Your own times are kept.
+Note: the coordinates in a "Marching" row are where the march is NOW, not the mine.
 
 Updates: on start the exe asks GitHub (UPDATE_REPO) for the latest release. If it
 is newer than APP_VERSION a banner offers "Update now": the new exe is downloaded,
@@ -348,7 +351,7 @@ class Slot:
         self.target = None       # current marching target label
         self.coords = None
         self.last_target = None  # last mine it was marching to
-        self.done = None         # ((coords, mine), when) of the last gather counted
+        self.done = None         # when this arrival's gather was counted (gems)
         self.seen = 0            # last time a scan showed this commander
         self.reset()
 
@@ -365,7 +368,6 @@ class Slot:
 
 
 slots = [Slot() for _ in range(MAX_MARCHES)]
-mine_by_coord = {}
 
 
 def normalize(text):
@@ -648,21 +650,22 @@ def assign_slot(act, r, seen):
     return s, old
 
 
-def same_mine(a, b):
-    """(coords, mine label) pairs: compare coords when both are known, else the label."""
-    if a[0] and b[0]:
-        return tuple(a[0]) == tuple(b[0])
-    return not a[1] or not b[1] or a[1] == b[1]
+def expected_secs(s):
+    """Roughly how long this commander's gather at this level takes (for sanity checks)."""
+    lvl = gem_level(s.last_target) or s.level
+    saved = GATHER_TIMES.get(s.key, {}).get("times", {}).get(lvl)
+    return smart_secs(s.key, lvl) or saved or 1200
 
 
 def count_gather(s, now):
     """Count the gems of the gather this slot just finished, once per gather.
+    s.done is when this arrival's gather was counted: if a saved time ran out
+    before the real timer, the real end is not counted a second time.
     Returns a RESULT line, or None."""
     s.counted = True
-    key = (s.coords, s.last_target)
-    if s.done and now - s.done[1] < 3600 and same_mine(s.done[0], key):
-        return None   # already counted when the saved time ran out before the real timer
-    s.done = (key, now)
+    if s.done is not None:
+        return None
+    s.done = now
     lvl = gem_level(s.last_target) or s.level
     if lvl in GEM_VALUE:
         add_gems(GEM_VALUE[lvl], f"{s.full} L{lvl} Gem Mine")
@@ -673,12 +676,15 @@ def count_gather(s, now):
 
 
 def finish_gather(s, now):
-    """The march left its mine before the tracker saw the gather end (saved time
-    too long, or no timer at all): count it now. A scanned timer with more than
-    a minute left means the march was recalled, so nothing is counted."""
-    if s.counted or s.status not in ("gathering", "ready", "update"):
+    """A scan shows the march on a new march before the tracker saw its gather end.
+    Count that gather only if it was really (nearly) done: under 3 minutes left,
+    or at least 70% of a saved-time estimate passed. Otherwise it was recalled
+    (or never gathered), so nothing is counted."""
+    if s.counted or s.status not in ("gathering", "ready") or not s.gather_due:
         return None
-    if s.status == "gathering" and not s.est and now < s.gather_due - 60:
+    left = s.gather_due - now
+    mostly = s.est and s.start and now - s.start >= 0.7 * (s.gather_due - s.start)
+    if left > 180 and not mostly:
         return None
     return count_gather(s, now)
 
@@ -722,8 +728,6 @@ def apply_rows(rows, n, smart=False):
                         info["gems"].append(note)
                 if label:
                     s.last_target = label
-                    if r["coords"]:
-                        mine_by_coord[r["coords"]] = label
                 elif s.status != "walking":
                     s.last_target = None
                 s.target, s.coords = label or s.target, r["coords"]
@@ -736,13 +740,7 @@ def apply_rows(rows, n, smart=False):
                 s.level = gem_level(s.target)
             else:
                 xy = r["coords"]
-                moved = xy and s.coords and xy != s.coords
-                if moved:                          # moved to another mine between scans
-                    note = finish_gather(s, now)
-                    if note:
-                        info["gems"].append(note)
-                    s.done, s.last_target = None, mine_by_coord.get(xy)
-                elif smart:                        # Smart Gather: time since arrival + time left
+                if smart:                          # Smart Gather: time since arrival + time left
                     arr = s.arrived or (s.walk_due if s.status == "walking" and s.walk_due
                                         and s.walk_due <= now + 30 else None)
                     lvl = s.level or gem_level(s.last_target)
@@ -754,14 +752,14 @@ def apply_rows(rows, n, smart=False):
                                              f"({k} gather{'s' if k > 1 else ''})")
                 s.arrived = None                   # one measurement per arrival
                 s.coords = xy or s.coords
-                if not s.last_target and xy in mine_by_coord:
-                    s.last_target = mine_by_coord[xy]
                 info["gathering"].append(s.short)
                 gd = now + secs
                 if s.status in ("gathering", "ready") and s.gather_due \
                         and abs(s.gather_due - gd) < 20:
                     s.est = False       # real timer agrees with the estimate
                     continue
+                if s.done is not None and gd - s.done > max(600, 0.5 * expected_secs(s)):
+                    s.done = None       # ends long after the counted one: a new gather
                 s.reset()               # real timer overwrites any estimate
                 s.status, s.start, s.gather_due = "gathering", now, gd
     return info
@@ -782,7 +780,7 @@ def sub_parts(s):
         post = xy + ("  - saved time" if s.est else "")
         if s.last_target:
             return ("Gathering at ", s.last_target, post)
-        return ("Gem Mine level currently not detected" + post, "", "")
+        return ("Mine level not read - scan while it is marching to see it" + post, "", "")
     if s.status == "update":
         if s.target:
             return ("Arrived at ", s.target, xy + " - scan to start the timer")
@@ -1398,6 +1396,9 @@ class Scroll(tk.Frame):
         self.cv.yview_moveto((w.winfo_rooty() - self.body.winfo_rooty()) / total)
 
 
+COLORS = {"own": WHITE, "smart": TEAL, "fallback": TEXT}
+
+
 class TimeEntry(tk.Entry):
     """MM:SS box that shows a grey 'MM:SS' hint while empty."""
     PH = "MM:SS"
@@ -1407,8 +1408,7 @@ class TimeEntry(tk.Entry):
                          relief="flat", bd=0, font=font, justify="center", highlightthickness=0,
                          disabledbackground=FIELD, disabledforeground=GRAY)
         self.ph = False
-        self.smart = False       # value put in by Smart Gather (teal), not typed
-        self.shown = ""
+        self.kind = "own"        # "own" (your time), "smart" (learned) or "fallback" (own, Smart view)
         self._hint()
         self.bind("<FocusIn>", self._in)
         self.bind("<FocusOut>", self._out)
@@ -1416,16 +1416,13 @@ class TimeEntry(tk.Entry):
 
     def _typed(self, e):
         self.mark_ok()
-        if self.smart and self.get() != self.shown:   # edited by hand: it's yours now
-            self.smart = False
-            self.configure(fg=WHITE)
 
     def _hint(self):
         self.delete(0, "end")
         self.insert(0, self.PH)
         self.configure(fg=GRAY)
         self.ph = True
-        self.smart = False
+        self.kind = "own"
 
     def _in(self, e):
         if self.ph:
@@ -1440,21 +1437,23 @@ class TimeEntry(tk.Entry):
     def value(self):
         return "" if self.ph else self.get().strip()
 
-    def set_value(self, text, smart=False):
+    def set_value(self, text, kind="own"):
         st = str(self.cget("state"))
         self.configure(state="normal")
         if text:
             self.delete(0, "end")
             self.insert(0, text)
-            self.configure(fg=TEAL if smart else WHITE)
-            self.ph, self.smart, self.shown = False, smart, text
+            self.configure(fg=COLORS[kind])
+            self.ph, self.kind = False, kind
         else:
             self._hint()
         self.set_locked(st == "disabled")
 
     def set_locked(self, locked):
+        # locked own times are green; learned ones teal; own times shown in Smart view grey
         self.configure(state="disabled" if locked else "normal",
-                       disabledforeground=GRAY if self.ph else TEAL if self.smart else GREEN)
+                       disabledforeground=GRAY if self.ph else
+                       {"own": GREEN, "smart": TEAL, "fallback": TEXT}[self.kind])
 
     def mark_bad(self):
         self.master.itemconfigure("bg", image=self.master.bad)
@@ -1911,7 +1910,8 @@ class App:
         head = tk.Frame(box.body, bg=CARD)
         head.pack(fill="x")
         self.icon(head, ic, TEXT, 12).pack(side="left")
-        self.label(head, title, WHITE, 11, "semi").pack(side="left", padx=(10, 6))
+        ttl = self.label(head, title, WHITE, 11, "semi")
+        ttl.pack(side="left", padx=(10, 6))
         if tip:
             self.info(head, tip).pack(side="left")
         chev = Pill(head, "", glyph("up"), lambda: self.toggle_section(key), fill=CARD,
@@ -1919,7 +1919,7 @@ class App:
         chev.pack(side="right")
         body = tk.Frame(box.body, bg=CARD)
         body.pack(fill="x", pady=(14, 0))
-        self.sec[key] = {"box": box, "body": body, "chev": chev}
+        self.sec[key] = {"box": box, "body": body, "chev": chev, "title": ttl}
         return head, body
 
     def toggle_section(self, key, save=True):
@@ -1972,7 +1972,11 @@ class App:
             self.rows.append(w)
 
     def build_times(self, parent):
-        head, body = self.section(parent, "times", "timer", "Gather Times",
+        head, body = self.section(parent, "times", "timer",
+                                  "Smart Gather Times" if self.smart_on else "Gather Times",
+                                  lambda: "Times learned from your scans (read-only). Levels not "
+                                  "learned yet use your own time, shown in grey. Turn Smart Gather "
+                                  "off to see and edit your own times." if self.smart_on else
                                   "How long each commander takes to clear a Gem Mine of each "
                                   "level, as MM:SS. When a march arrives at a mine its time "
                                   "starts by itself. Lock a row to keep its times.")
@@ -1980,8 +1984,9 @@ class App:
                              colors={False: SEL_OFF}, h=30, seg_w=48)
         self.smart_seg.pack(side="right", padx=(0, 12))
         self.info(head, "Smart Gather learns each commander's time per level from your scans "
-                        "(scan while marching, then again once gathering) and fills EMPTY boxes "
-                        "in teal. Typed times are never replaced.").pack(side="right", padx=(0, 8))
+                        "(scan while marching, then again once gathering). On: those learned times "
+                        "are used and shown. Off: your own times are used; they are kept either "
+                        "way.").pack(side="right", padx=(0, 8))
         self.label(head, "Smart Gather", TEXT, 9, "semi").pack(side="right", padx=(0, 6))
         self.icon(head, "smart", TEAL, 11).pack(side="right", padx=(0, 6))
         self.t_empty = self.label(body, "Scan first - detected gatherers appear here.", MUTED, 9,
@@ -2015,7 +2020,7 @@ class App:
                 fld.pack()
                 ent[L] = fld.entry
             self.trows.append({"box": box, "name": nm, "btn": btn, "ent": ent,
-                               "key": None, "locked": False})
+                               "key": None, "locked": False, "smart_view": False, "manual": {}})
 
     def build_settings(self, parent):
         _, body = self.section(parent, "settings", "settings", "Settings")
@@ -2103,7 +2108,7 @@ class App:
 
     def toggle_lock(self, i):
         row, s = self.trows[i], slots[i]
-        if not s.gatherer:
+        if not s.gatherer or row["smart_view"]:
             return
         if row["locked"]:
             self.set_row_locked(i, False)
@@ -2147,13 +2152,18 @@ class App:
                 if row["key"] != s.key:
                     row["key"] = s.key
                     prof = GATHER_TIMES.get(s.key)
-                    for L, e in row["ent"].items():
-                        e.mark_ok()
-                        e.set_value(fmt_mmss(prof["times"][L])
-                                    if prof and L in prof["times"] else "")
-                    self.set_row_locked(i, bool(prof and prof["locked"] and prof["times"]))
+                    own = {L: fmt_mmss(prof["times"][L]) if prof and L in prof["times"] else ""
+                           for L in LEVELS}
+                    row["locked"] = bool(prof and prof["locked"] and prof["times"])
+                    if row["smart_view"]:
+                        row["manual"] = own
+                    else:
+                        for L, e in row["ent"].items():
+                            e.mark_ok()
+                            e.set_value(own[L])
+                        self.set_row_locked(i, row["locked"])
                     row["name"].configure(text=s.full)
-                self.smart_fill(i, s.key)
+                self.show_times(i, s.key)
             else:
                 row["key"] = None
         if vis != self._tvis:
@@ -2168,19 +2178,30 @@ class App:
             else:
                 self.t_empty.pack(fill="x", before=self.t_holder)
 
-    def smart_fill(self, i, key):
-        """Smart Gather: learned times go into empty boxes (teal); a typed time is never replaced."""
-        try:
-            focus = self.root.focus_get()
-        except Exception:
-            focus = None
-        for L, e in self.trows[i]["ent"].items():
-            if e is focus or not (e.smart or not e.value()):
-                continue
-            secs = smart_secs(key, L) if self.smart_on else None
-            text = fmt_mmss(secs) if secs else ""
-            if text != e.value() or e.smart != bool(text):
-                e.set_value(text, smart=True)
+    def show_times(self, i, key):
+        """Smart Gather on: the box shows learned times (teal, read-only); a level not
+        learned yet shows your own time in grey (that is what gets used). Off: your
+        own times come back, editable. Your own times are kept aside meanwhile."""
+        row = self.trows[i]
+        if self.smart_on:
+            if not row["smart_view"]:
+                row["manual"] = {L: e.value() for L, e in row["ent"].items()}
+                row["smart_view"] = True
+                row["btn"].pack_forget()
+            for L, e in row["ent"].items():
+                secs = smart_secs(key, L)
+                text, kind = (fmt_mmss(secs), "smart") if secs else (row["manual"].get(L, ""), "fallback")
+                if e.value() != text or e.kind != kind:
+                    e.set_value(text, kind)
+                if str(e.cget("state")) != "disabled":
+                    e.set_locked(True)
+        elif row["smart_view"]:
+            row["smart_view"] = False
+            for L, e in row["ent"].items():
+                e.mark_ok()
+                e.set_value(row["manual"].get(L, ""))
+            self.set_row_locked(i, row["locked"])
+            row["btn"].pack(side="right")
 
     # ---------- setup (march count + locked slots)
     def refresh_setup(self):
@@ -2207,7 +2228,6 @@ class App:
         with lock:
             for s in slots:
                 s.clear_identity()
-            mine_by_coord.clear()
         self.setup_locked = False
         self.refresh_setup()
         self.set_result("RESET: slots cleared - scan again")
@@ -2261,9 +2281,13 @@ class App:
     def set_smart(self, on):
         self.smart_on = on
         self.paint_smart()
+        self.sec["times"]["title"].configure(text="Smart Gather Times" if on else "Gather Times")
+        with lock:
+            self.refresh_times()
         self.save_settings()
-        self.set_result("SMART GATHER: on - gather times are learned from your scans and fill "
-                        "empty boxes" if on else "SMART GATHER: off - only your own times are used")
+        self.set_result("SMART GATHER: on - learned times are used (read-only); grey = not learned "
+                        "yet, your own time is used" if on else
+                        "SMART GATHER: off - your own times are back and editable")
 
     def paint_smart(self):
         self.smart_seg.set(self.smart_on)
@@ -2465,8 +2489,7 @@ class App:
                     "walk_due": s.walk_due, "start": s.start,
                     "coords": list(s.coords) if s.coords else None, "level": s.level,
                     "counted": s.counted, "alert2": s.alert2, "arrived": s.arrived,
-                    "done": {"coords": list(s.done[0][0]) if s.done[0][0] else None,
-                             "mine": s.done[0][1], "at": s.done[1]} if s.done else None,
+                    "done": s.done,
                 } for i, s in enumerate(slots[:self.n]) if s.key]
             with open(STATE_FILE, "w") as f:
                 json.dump({"updated": now, "marches": data}, f, indent=2)
@@ -2506,9 +2529,7 @@ class App:
                 s.counted, s.alert2 = bool(d.get("counted")), bool(d.get("alert2"))
                 s.arrived = d.get("arrived")
                 dn = d.get("done")
-                if dn:
-                    s.done = ((tuple(dn["coords"]) if dn.get("coords") else None, dn.get("mine")),
-                              dn.get("at") or 0)
+                s.done = dn.get("at") if isinstance(dn, dict) else dn    # older files: a dict
 
     def save_settings(self):
         if self.demo:
@@ -2863,12 +2884,9 @@ class App:
         self.n = 7
         self.setup_locked = True
         self.refresh_setup()
+        GATHER_TIMES["Seondeok"] = {"locked": True, "times": {1: 1800, 2: 1650, 3: 1500, 4: 1335}}
+        GATHER_TIMES["Cleopatra VII"] = {"locked": False, "times": {1: 1930, 2: 1780}}
         self.refresh_times()
-        for L, v in zip(LEVELS, ("30:00", "27:30", "25:00", "22:15")):
-            self.trows[0]["ent"][L].set_value(v)
-        self.set_row_locked(0, True)
-        for L, v in zip((1, 2), ("32:10", "29:40")):
-            self.trows[1]["ent"][L].set_value(v)
         self.set_result("GATHERING: Seondeok, Cleopatra\nMARCHING: Pepin (00:04:38)\n"
                         "NOT A GATHERER: 1 march(es)\nSLOTS: 1 still empty - scroll the list and scan again\n!NO FREE SLOT (raise HOW MANY): example error", None)
 

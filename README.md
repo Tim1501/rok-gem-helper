@@ -63,9 +63,11 @@ Optional:
 - **Settings > Scan area > Set**: drag a box around the Troops list for faster,
   more reliable scans.
 - **Overlay** button: keeps the timers on top of the game.
-- **Gather Times**: type how long each commander takes per Gem Mine level, or let
-  **Smart Gather** fill them in. A march's timer then starts by itself when it
-  arrives at the mine.
+- **Gather Times**: type how long each commander takes per Gem Mine level. A march's
+  timer then starts by itself when it arrives at the mine.
+- **Smart Gather**: learns those times from your scans (scan while a march is
+  marching, then again once it gathers). While it is On the card shows
+  **Smart Gather Times** (learned, read-only); turn it Off to see and edit your own.
 
 | Default key | Action |
 | --- | --- |

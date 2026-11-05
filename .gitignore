@@ -1,12 +1,16 @@
-# build output
-build/
-dist/
-__pycache__/
+# the app and what it saves (gems, times, settings, logs) stay on your PC
+ROK Gem Helper.exe
 *.exe
 *.exe.new
 *.exe.old
+data/
 
-# personal data written by the app (gems, times, settings, logs, debug scans)
+# build leftovers
+build/
+dist/
+__pycache__/
+
+# saved files written when running the .py directly
 march_*.json
 march_*.log
 overlay_pos.json

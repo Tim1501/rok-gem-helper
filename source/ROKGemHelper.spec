@@ -6,7 +6,7 @@ hiddenimports += collect_submodules('pystray')
 
 
 a = Analysis(
-    ['rok_march_alert.py'],
+    ['rok_gem_helper.py'],
     pathex=[],
     binaries=[],
     datas=[('assets/logo.png', 'assets'), ('assets/app_icon.png', 'assets')],
@@ -40,5 +40,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=True,
-    icon=['icon.ico'],
+    icon=['assets/icon.ico'],
 )

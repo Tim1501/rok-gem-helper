@@ -1,46 +1,100 @@
-# ROK Gem Helper
+<p align="center">
+  <img src="source/assets/app_icon.png" width="96" alt="ROK Gem Helper icon">
+</p>
 
-Gem march timers for **Rise of Kingdoms** (PC).
+<h1 align="center">ROK Gem Helper</h1>
+
+<p align="center">Gem march timers for <b>Rise of Kingdoms</b> on PC</p>
+
+<p align="center">
+  <a href="https://github.com/Tim1501/rok-gem-helper/releases/latest"><b>Download the latest version</b></a>
+</p>
+
+![ROK Gem Helper](source/assets/screenshot.png)
+
+## What it does
 
 When you farm gems by sending a march from one mine straight to the next, the
 game never tells you when a gather is done. ROK Gem Helper reads the Troops list
-on your screen, keeps a timer for every march, and alerts you (Windows
-notification, optional beep, flashing overlay) shortly before each gather ends.
+on your screen, keeps a timer for every march, and warns you shortly before each
+gather ends, so you can send the march on right away.
+
+- **Scan (F8)** reads every march, commander and Gem Mine level from the Troops list
+- **Alerts** a Windows notification before each gather ends, with an optional beep
+- **Overlay** small always-on-top timer window over the game
+- **Smart Gather** learns how long each commander takes per Gem Mine level
+- **Gem counter** gems farmed today and in total
+- **Updates itself** when a new version is out, with one click
+
+## Before you start
+
+> **English only.** The app reads the text on your screen, so the game must be set
+> to **English**. Other languages are not supported yet.
+
+> **Antivirus / "Windows protected your PC" warning.** The app is free and not
+> code-signed (signing costs money), so Windows SmartScreen and some antivirus
+> programs warn about it or block it. This is common for small, unsigned apps.
+> If you trust it, click **More info > Run anyway**; if your antivirus removed
+> it, restore it from the antivirus quarantine (Windows Security > Protection
+> history) and allow it. The full source code is in this repository.
 
 ## Install
 
-1. Install **Tesseract OCR** (reads the text on screen):
-   https://github.com/UB-Mannheim/tesseract/wiki - keep the default folder.
-2. Download `ROK-Gem-Helper.exe` from the
-   [latest release](../../releases/latest) and put it in its own folder.
-3. Double-click it. Windows may ask for administrator rights (needed for the
-   F8 / F9 / F10 hotkeys while the game is focused).
+1. Install **Tesseract OCR**, which reads the text on screen:
+   [download it here](https://github.com/UB-Mannheim/tesseract/wiki) and keep the
+   default install folder.
+2. Download **ROK-Gem-Helper.exe** from the
+   [latest release](https://github.com/Tim1501/rok-gem-helper/releases/latest)
+   and put it in a folder of its own (for example `Documents\ROK Gem Helper`).
+3. Double-click it. Windows asks for administrator rights; that is needed for the
+   F8 / F9 / F10 hotkeys to work while the game window is active.
 
-The app updates itself: when a new version is out it shows
-**Update available** - click **Update now**.
+The app saves everything (gems, gather times, settings) in a `data` folder next to
+the exe. Keep the two together.
 
-## Use
+## How to use
 
-1. Settings > Marches: pick how many marches you have.
-2. Open the Troops list in the game and press **F8** (or click **Scan**).
+1. **Settings > Marches**: choose how many marches you have.
+2. Open the **Troops list** in the game and press **F8** (or click **Scan**).
 3. Scan again after sending marches out, and once they start gathering.
-4. Optional: Settings > Scan area > **Set** and drag a box around the Troops
-   list for faster scans; turn on the **overlay** to keep timers on top of the game.
+4. When a row turns red (**Resend!**) the gather is about to end: send the march on.
+
+Optional:
+- **Settings > Scan area > Set**: drag a box around the Troops list for faster,
+  more reliable scans.
+- **Overlay** button: keeps the timers on top of the game.
+- **Gather Times**: type how long each commander takes per Gem Mine level, or let
+  **Smart Gather** fill them in. A march's timer then starts by itself when it
+  arrives at the mine.
 
 | Key | Action |
 | --- | --- |
 | F8  | Scan the Troops list |
-| F9  | Unlock / lock the overlay for moving |
+| F9  | Unlock / lock the overlay to move it |
 | F10 | Clear all timers |
 
-**Gather Times**: type how long each commander takes per Gem Mine level, or let
-**Smart Gather** learn it from your scans. A march's gather timer then starts by
-itself when it arrives.
+Gems are counted as Gem Mine level x 10 per finished gather (level 1 = 10 ...
+level 4 = 40). Commander talents and buffs are not included.
 
-**Gems**: level x Gem Mine = x*10 gems per finished gather. Commander talents
-and buffs are not counted.
+## Updates
 
-All data (gems, times, settings) is stored next to the exe.
+When a new version is published, the app shows **Update available** at the top.
+Click **Update now**: it downloads the new version, checks it, and restarts.
+Your saved data is kept. What changed is listed under **What's new** in the app
+and on the [releases page](https://github.com/Tim1501/rok-gem-helper/releases).
+
+## Repository layout
+
+| Path | What it is |
+| --- | --- |
+| `source/rok_gem_helper.py` | The whole app |
+| `source/assets/` | Icon, logo and screenshot |
+| `source/ROKGemHelper.spec` | Build settings for the exe (PyInstaller) |
+| `source/release.py` | Builds and publishes a new version |
+
+Run from source: `pip install mss pytesseract pillow opencv-python keyboard plyer pystray`,
+then `python source/rok_gem_helper.py`.
 
 ---
-Made by @ChanaMasala on Discord.
+
+Made by **@ChanaMasala** on Discord. Not affiliated with Lilith Games.

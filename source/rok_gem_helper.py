@@ -69,7 +69,7 @@ checked against its .sha256 file, swapped in (the old one is renamed to .old and
 deleted on the next start) and the app restarts. Data files are not touched.
 Publishing: raise APP_VERSION, build, then make a GitHub release tagged vX.Y.Z with
 ROK-Gem-Helper.exe and ROK-Gem-Helper.exe.sha256 attached:
-         add the version to CHANGELOG, then  python release.py X.Y.Z  (does all of it)
+         add the version to CHANGELOG, then  python source/release.py X.Y.Z
 
 Hotkeys:  F8 = scan    F9 = unlock/lock overlay for dragging    F10 = clear timers
 
@@ -77,7 +77,10 @@ Setup (Windows):
   1. Install Tesseract OCR: https://github.com/UB-Mannheim/tesseract/wiki
   2. pip install mss pytesseract pillow opencv-python keyboard plyer pystray
 
-Run:     python rok_march_alert.py
+Files:   the app keeps everything it saves (gems, times, settings, logs) in a
+         "data" folder next to the exe; files from older versions are moved in.
+
+Run:     python rok_gem_helper.py
 Options: --marches 5 --lead 30 --region L T W H
          --test-image shot.png   (OCR test, no window)
 """
@@ -98,13 +101,17 @@ import cv2
 import numpy as np
 import pytesseract
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 UPDATE_REPO = "Tim1501/rok-gem-helper"     # GitHub repository new versions are published in
 UPDATE_ASSET = "ROK-Gem-Helper.exe"       # release file name (+ ".sha256" checksum file)
 
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.1", "2026-11-05", [
+        "Tidier folder: your saved files now live in a 'data' folder",
+        "Only works with the game set to English for now",
+    ]),
     ("1.0.0", "2026-11-05", [
         "First public release",
         "F8 reads the Troops list and keeps a timer for every march",
@@ -2555,6 +2562,26 @@ class App:
 
 
 # ================================================================ main
+DATA_FILES = ("overlay_pos.json", "scan_debug.png", "scan_debug.txt")
+
+
+def use_data_dir():
+    """Work inside a 'data' folder next to the exe, so the exe's folder stays tidy.
+    Files an older version left next to the exe are moved in."""
+    base = os.path.dirname(sys.executable if getattr(sys, "frozen", False)
+                           else os.path.abspath(__file__))
+    data = os.path.join(base, "data")
+    os.makedirs(data, exist_ok=True)
+    for name in os.listdir(base):
+        if name.startswith("march_") and name.endswith((".json", ".log")) or name in DATA_FILES:
+            if not os.path.exists(os.path.join(data, name)):
+                try:
+                    os.replace(os.path.join(base, name), os.path.join(data, name))
+                except OSError:
+                    pass
+    os.chdir(data)
+
+
 def main():
     global STATE_FILE
     ap = argparse.ArgumentParser()
@@ -2587,6 +2614,8 @@ def main():
             print(f"{who:<24} {t:<20} {sub_text(s) if s else ''}")
         print("Unassigned timers:", orph)
         return
+
+    use_data_dir()
 
     root = tk.Tk()
     app_box = {}

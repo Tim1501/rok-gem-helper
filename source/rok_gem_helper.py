@@ -133,6 +133,11 @@ DONORS_FILE = "donors.json"               # last list downloaded, for offline us
 # Newest first. Shown in the sidebar under "What's new"; release.py uses the
 # entry of the version it publishes as the GitHub release notes.
 CHANGELOG = [
+    ("1.0.5", "2026-11-05", [
+        "Top Donators: crowns for the top 3 and a new thank-you note",
+        "Overlay: red cross when a gather is done (NOW)",
+        "Clearer message when the donators list can't load",
+    ]),
     ("1.0.4", "2026-11-05", [
         "Hotkeys work again (v1.0.3 wrongly asked for administrator)",
         "Fixed gems being counted for gathers that never finished",
@@ -1599,6 +1604,10 @@ class Field(tk.Canvas):
 
 
 # march row look per status: (icon, colour, chip text)
+# Top Donators crowns: (body, band, gems) for ranks 1-3 - diamond, gold, silver
+CROWNS = {1: ("#8fe3ff", "#4fb8e0", "#ffffff"), 2: ("#f4c84a", "#d19a1c", "#fff3c4"),
+          3: ("#d3d9e1", "#9aa3ae", "#ffffff")}
+
 LOOK = {"idle": ("clock", MUTED, "Idle"), "walking": ("walk", ORANGE, "Marching"),
         "returning": ("return", ACCENT, "Returning"),
         "update": ("sync", GOLD, "Scan now"), "gathering": ("timer", GREEN, "Gathering"),
@@ -2054,20 +2063,31 @@ class App:
             self.scroll.pack(fill="both", expand=True, padx=(28, 10), pady=(0, 14))
 
     def medal(self, rank):
-        """Round rank badge: gold / silver / bronze for the top 3, grey after."""
+        """Rank mark: a crown for the top 3 (diamond, gold, silver), a grey number after."""
         if rank not in self._medals:
             from PIL import Image, ImageDraw, ImageFont, ImageTk
-            col, fg = {1: ("#e9c24f", "#3a2a00"), 2: ("#c3c9d2", "#22262c"),
-                       3: ("#cd8a4f", "#2d1806")}.get(rank, (FIELD_HI, TEXT))
             S = 34 * 8
             im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
-            d.ellipse([0, 0, S - 1, S - 1], fill=col)
-            try:
-                f = ImageFont.truetype(r"C:\Windows\Fonts\seguisb.ttf", int(S * 0.42))
-                d.text((S / 2, S / 2), str(rank), font=f, fill=fg, anchor="mm")
-            except Exception:
-                pass
+            if rank in CROWNS:
+                body, band, gem = CROWNS[rank]
+                P = lambda x, y: (x * S, y * S)
+                d.polygon([P(.14, .72), P(.10, .30), P(.33, .50), P(.50, .20), P(.67, .50),
+                           P(.90, .30), P(.86, .72)], fill=body)
+                d.rounded_rectangle([.12 * S, .66 * S, .88 * S, .84 * S], radius=int(.05 * S), fill=band)
+                r = .07 * S
+                for x, y in ((.10, .28), (.50, .17), (.90, .28)):
+                    d.ellipse([x * S - r, y * S - r, x * S + r, y * S + r], fill=body)
+                r = .055 * S
+                for x in (.32, .50, .68):
+                    d.ellipse([x * S - r, .75 * S - r, x * S + r, .75 * S + r], fill=gem)
+            else:
+                d.ellipse([0, 0, S - 1, S - 1], fill=FIELD_HI)
+                try:
+                    f = ImageFont.truetype(r"C:\Windows\Fonts\seguisb.ttf", int(S * 0.42))
+                    d.text((S / 2, S / 2), str(rank), font=f, fill=TEXT, anchor="mm")
+                except Exception:
+                    pass
             self._medals[rank] = ImageTk.PhotoImage(im.resize((34, 34), Image.LANCZOS))
         return self._medals[rank]
 
@@ -2098,7 +2118,7 @@ class App:
             tk.Label(rb, image=self.medal(rank), bg=GROUP, bd=0).pack(side="left", padx=(0, 14))
             mid = tk.Frame(rb, bg=GROUP)
             mid.pack(side="left", fill="x", expand=True)
-            self.label(mid, name, WHITE if rank > 3 else GOLD if rank == 1 else WHITE,
+            self.label(mid, name, CROWNS[rank][0] if rank in CROWNS else WHITE,
                        12 if rank <= 3 else 11, "semi", anchor="w").pack(anchor="w")
             if msg:
                 self.label(mid, f'"{msg}"', MUTED, 9, anchor="w").pack(anchor="w")

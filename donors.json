@@ -1,5 +1,11 @@
 {
   "currency": "$",
   "updated": "2026-11-05",
-  "donors": []
+  "donors": [
+    {
+      "name": "My Sister :p",
+      "amount": 50,
+      "message": "Lets GOO!!"
+    }
+  ]
 }
